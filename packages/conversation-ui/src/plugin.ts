@@ -1,7 +1,6 @@
 import type { Context } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/dsh-host-webserver'
 import type { ConnectionRpcHandler } from '@deepseek-ai/dsh-client-connection'
-import { settingsNamespace } from '@deepseek-ai/dsh-settings'
 import Schema from '@deepseek-ai/schemastery'
 import { DEFAULT_CONVERSATION_CONFIG, type ConversationConfig } from './config.ts'
 import { injectConversationConfig } from './boot-config.ts'
@@ -70,7 +69,7 @@ export function apply(ctx: Context, config: Config): void {
   // the plugin's own loopback-only connection channel instead.
   ctx.inject(['settings'], (settingsCtx) => {
     const scope = settingsCtx.settings.register(
-      settingsNamespace(CONVERSATION_SETTINGS_NS),
+      CONVERSATION_SETTINGS_NS,
       ConversationSettingsSchema,
       { applies: 'live' },
     )
@@ -82,7 +81,7 @@ export function apply(ctx: Context, config: Config): void {
         return {
           version: CONVERSATION_PACKAGE_VERSION,
           installation: installation.kind,
-          writable: connectionCtx.settings.writable,
+          writable: settingsCtx.settings.writable,
           thinkAutoExpand: scope.get().thinkAutoExpand,
           canUpgrade: installation.kind === 'npm',
         }
@@ -147,7 +146,7 @@ export function apply(ctx: Context, config: Config): void {
         return { ok: false, error: { code: 'internal', message: `unknown conversation-ui endpoint ${JSON.stringify(endpoint)}`, details: {} } }
       }
       connectionCtx.effect(
-        () => connectionCtx.connection.rpc.handle(CONVERSATION_SETTINGS_RPC_CHANNEL, handle, { authority: 'loopback' }),
+        () => connectionCtx.connection.rpc.handle(CONVERSATION_SETTINGS_RPC_CHANNEL, handle),
         'dsh-conversation-ui: settings RPC',
       )
     })

@@ -1,6 +1,7 @@
 import { act, cleanup, fireEvent, render, waitFor } from '@testing-library/react'
 import { Context } from '@deepseek-ai/cordis'
-import { ConversationEventRegistry, SlotRegistry } from '@deepseek-ai/dsh-client-runtime/client'
+import { ConversationEventRegistry } from '@deepseek-ai/dsh-client-ui-conversation/client'
+import { SlotRegistry } from '@deepseek-ai/dsh-client-ui-renderer/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createElement, memo, useState, type FunctionComponent } from 'react'
 import { readFileSync } from 'node:fs'
@@ -996,13 +997,6 @@ describe('Codex-style deliverables', () => {
           type: 'tool/call',
           data: { turn: 1, step: 1, callId: 'edit-1', name: 'edit', arguments: '{}' },
         },
-        view: {
-          for: 'call',
-          view: {
-            card: 'diff',
-            diffs: [{ path: 'src/App.tsx', oldText: 'old', newText: 'new\nnext' }],
-          },
-        },
       } as never,
     )
     const updated = deliverablesDefinition.update(
@@ -1019,6 +1013,7 @@ describe('Codex-style deliverables', () => {
               source: { type: 'tool-result', callId: 'edit-1' },
               content: [{ type: 'tool-result', content: [], isError: false }],
             },
+            meta: { diffs: [{ path: 'src/App.tsx', oldText: 'old', newText: 'new\nnext' }] },
           },
         },
       } as never,
@@ -1158,7 +1153,8 @@ describe('client plugin lifecycle', () => {
   it('registers the delivery data definition and tail card when conversation events are available', async () => {
     const ctx = new Context()
     await ctx.plugin(SlotRegistry).await()
-    await ctx.plugin(ConversationEventRegistry).await()
+    const events = new ConversationEventRegistry(ctx)
+    ctx.provide('uiConversation', { events } as never)
     ctx.slots.register({
       name: 'root',
       children: { 'conversation.chat.turnTail': { kind: 'chain', scope: 'session' } },
@@ -1168,11 +1164,11 @@ describe('client plugin lifecycle', () => {
 
     expect(ctx.slots.entries('conversation.chat.turnTail')).toHaveLength(1)
     expect(ctx.slots.entries('conversation.chat.turnTail')[0]?.component).toBe(DeliverablesCard)
-    expect(ctx.get('conversationEvents')?.entries().some(entry => entry.kind === DELIVERABLES_DATA_KEY)).toBe(true)
+    expect(events.entries().some(entry => entry.kind === DELIVERABLES_DATA_KEY)).toBe(true)
 
     await fiber.dispose()
     expect(ctx.slots.entries('conversation.chat.turnTail')).toHaveLength(0)
-    expect(ctx.get('conversationEvents')?.entries().some(entry => entry.kind === DELIVERABLES_DATA_KEY)).toBe(false)
+    expect(events.entries().some(entry => entry.kind === DELIVERABLES_DATA_KEY)).toBe(false)
   })
 
   it('wraps a prior tool-call that already declared children without re-registering', async () => {

@@ -1,6 +1,14 @@
 import { describe, expect, it } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
-import type { CredentialInfo, CredentialRef, ResolvedCredential } from '@deepseek-ai/dsh-credentials'
+import type {
+  CredentialInfo,
+  CredentialKey,
+  CredentialRecord,
+  CredentialRecordEntry,
+  CredentialRecordInfo,
+  CredentialRef,
+  ResolvedCredential,
+} from '@deepseek-ai/dsh-credentials'
 import { CredentialProvider } from '@deepseek-ai/dsh-credentials'
 import LlmRuntime from '@deepseek-ai/dsh-llm'
 import { SettingsProvider } from '@deepseek-ai/dsh-settings'
@@ -21,6 +29,29 @@ class MemoryCredentials extends CredentialProvider {
   }
 
   override unset(_ref: CredentialRef): Promise<void> {
+    return Promise.resolve()
+  }
+
+  override readRecord(_key: CredentialKey): Promise<CredentialRecord | undefined> {
+    return Promise.resolve(undefined)
+  }
+
+  override describeRecord(_key: CredentialKey): Promise<CredentialRecordInfo> {
+    return Promise.resolve({ configured: false, writable: true })
+  }
+
+  override listRecords(): Promise<readonly CredentialRecordEntry[]> {
+    return Promise.resolve([])
+  }
+
+  override modifyRecord(
+    _key: CredentialKey,
+    _mutate: (current: CredentialRecord | undefined) => Promise<CredentialRecord | undefined>,
+  ): Promise<CredentialRecord | undefined> {
+    return Promise.resolve(undefined)
+  }
+
+  override deleteRecord(_key: CredentialKey): Promise<void> {
     return Promise.resolve()
   }
 }

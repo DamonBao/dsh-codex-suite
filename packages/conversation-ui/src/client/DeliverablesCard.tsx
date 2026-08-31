@@ -1,5 +1,5 @@
 import { useLayoutEffect, useState } from 'react'
-import type { TurnTailOwnerProps } from '@deepseek-ai/dsh-client-ui-conversation/client'
+import type { TurnTailOwnerProps } from '@deepseek-ai/dsh-client-ui-chat/client'
 import {
   IconChevronDownOutline14,
   IconChevronUpOutline14,

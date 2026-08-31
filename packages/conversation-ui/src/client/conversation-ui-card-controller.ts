@@ -1,6 +1,6 @@
 /** Staged form state for the plugin-owned conversation-ui settings RPC. */
 
-import { createSnapshotStore, type SnapshotStore } from '@deepseek-ai/dsh-client-runtime/client'
+import { createSnapshotStore, type SnapshotStore } from '@deepseek-ai/dsh-client-store'
 import { DEFAULT_CONVERSATION_SETTINGS } from '../settings.ts'
 import type { ConversationInstallationKind, ConversationSettingsView } from '../settings-api.ts'
 import type { ConversationSettingsApi } from './conversation-ui-settings-api.ts'

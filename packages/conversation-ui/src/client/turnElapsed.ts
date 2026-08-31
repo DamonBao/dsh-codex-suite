@@ -1,4 +1,4 @@
-import type { ChatNodeViewProps } from '@deepseek-ai/dsh-client-ui-conversation/client'
+import type { ChatNodeViewProps } from '@deepseek-ai/dsh-client-ui-chat/client'
 
 export type TurnElapsedTranslator = ChatNodeViewProps<'assistant-step'>['t']
 

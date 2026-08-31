@@ -1,11 +1,17 @@
 import { createElement, useSyncExternalStore, type ComponentType } from 'react'
-import type { ClientContext } from '@deepseek-ai/dsh-client-runtime/client'
+import type { Context as ClientContext } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/dsh-client-locale/client'
 // Type-only: the connection Context merge and the plugins section's SlotMap
 // entry ('settings.plugin.item').
 import type { ConnectionHandle } from '@deepseek-ai/dsh-client-connection/client'
 import type {} from '@deepseek-ai/dsh-client-ui-settings-plugins/client'
-import type { ChatNodeViewProps } from '@deepseek-ai/dsh-client-ui-conversation/client'
+// Type-only: the SlotRegistry service merge (ctx.slots), the Chat SlotMap
+// entries ('conversation.chat.node' / 'conversation.chat.turnTail'), and the
+// uiConversation service merge.
+import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
+import type {} from '@deepseek-ai/dsh-client-ui-chat/client'
+import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
+import type { ChatNodeViewProps } from '@deepseek-ai/dsh-client-ui-chat/client'
 import { TypewriterAssistantNodeView } from './TypewriterAssistantNodeView.tsx'
 import { wrapFollowNodeView, type FollowWrapProps } from './TypewriterToolNodeView.tsx'
 import { wrapTurnPreludeNodeView } from './TurnPreludeUserNodeView.tsx'
@@ -177,10 +183,8 @@ export function apply(ctx: ClientContext): void {
     select: selectDeliverables,
     registrant: 'dsh-conversation-ui',
   }, DeliverablesCard))
-  ctx.inject(['conversationEvents'], (deliverablesCtx) => {
-    const events = deliverablesCtx.get('conversationEvents') as {
-      register: (definition: typeof deliverablesDefinition) => () => void
-    }
+  ctx.inject(['uiConversation'], (deliverablesCtx) => {
+    const events = deliverablesCtx.uiConversation.events
     return events.register(deliverablesDefinition)
   })
 
@@ -231,7 +235,7 @@ export function apply(ctx: ClientContext): void {
       name: 'conversation.chat.node',
       key: 'assistant-step',
       priority: -100,
-      locale: 'conversation',
+      locale: 'chat',
       registrant: 'dsh-conversation-ui',
     }, configured)
     return () => {

@@ -7,7 +7,7 @@
 
 English | [简体中文](README.zh.md)
 
-A suite of [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) (DSH) plugins that brings **ChatGPT/OpenAI Codex models** and a **Codex-style conversation experience** to the DSH Web UI.
+A suite of [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) (DSH) plugins that brings **ChatGPT/OpenAI Codex models** and a **Codex-style conversation experience** to the DSH Web UI. Built against DSH `0.1.2-alpha.2` (peer range `>=0.1.2-alpha.2 <0.2.0`).
 
 The repository is a pnpm monorepo containing two independent runtime plugins and one pure bundle package:
 
@@ -128,7 +128,7 @@ Each runtime plugin ships two halves:
 - **Host half** (Node) — Cordis plugin: provider registration, OAuth lifecycle, networking, settings persistence. Loaded from the package root.
 - **Web half** (browser) — React views discovered through the `dsh.client` manifest. The Codex Provider contributes the Settings section; the Conversation UI replaces the assistant node view and wraps tool rows.
 
-The halves communicate through two narrow channels: an inline **boot-config global** (`window.__DSH_CONVERSATION_UI_CONFIG__`) injected into the served HTML carries validated plugin config to the browser, and **loopback-authority RPC** carries settings reads/writes back to the Host. Secrets (tokens, proxy URLs) never cross the RPC boundary.
+The halves communicate through two narrow channels: an inline **boot-config global** (`window.__DSH_CONVERSATION_UI_CONFIG__`) injected into the served HTML carries validated plugin config to the browser, and the **authenticated Connection RPC** carries settings reads/writes back to the Host. Secrets (tokens, proxy URLs) never cross the RPC boundary.
 
 Package-level docs: [codex-provider](packages/codex-provider/README.md) · [conversation-ui](packages/conversation-ui/README.en.md) · [suite](packages/all/README.md)
 
@@ -151,7 +151,7 @@ pnpm --filter @jcy2387/dsh-conversation-ui build
 pnpm --dir packages/all pack --dry-run
 ```
 
-Tests run on [vitest](https://vitest.dev) — 13 suites covering the OAuth state machine, token refresh, network/proxy detection, usage parsing, the settings controllers, and the streaming client views. CI additionally checks out the DSH source tree at the pinned revision the workspace depends on, verifies release tags match all three package versions, and audits the published tarball contents.
+Tests run on [vitest](https://vitest.dev) — 14 suites covering the OAuth state machine, token refresh, network/proxy detection, usage parsing, the settings controllers, and the streaming client views. Client tests resolve the installed published DSH packages (a small module-table stand-in instantiates the shipped browser factory bundles). CI verifies release tags match all three package versions and audits the published tarball contents.
 
 ### Repository layout
 
@@ -161,7 +161,7 @@ Tests run on [vitest](https://vitest.dev) — 13 suites covering the OAuth state
 │  ├─ codex-provider/     # @jcy2387/dsh-codex-provider
 │  │  ├─ src/             # Host half: OAuth, refresh, network, usage, LLM adapter
 │  │  ├─ src/client/      # Web half: Settings section UI
-│  │  ├─ tests/           # 10 vitest suites
+│  │  ├─ tests/           # 11 vitest suites
 │  │  └─ cordis.patch.yml
 │  ├─ conversation-ui/    # @jcy2387/dsh-conversation-ui
 │  │  ├─ src/             # Host half: config bridge, settings RPC

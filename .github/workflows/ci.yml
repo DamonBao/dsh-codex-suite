@@ -31,20 +31,6 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
 
-      # conversation-ui tests intentionally resolve the DSH client source tree
-      # instead of the browser-only production bundles. Keep this pinned to the
-      # rc.8 source revision used by the workspace dependencies.
-      - name: Check out DSH source dependencies
-        uses: actions/checkout@v4
-        with:
-          repository: deepseek-ai/deepseek-harness
-          ref: 141eb6fef83422698aef7a981029e843e8161534
-          path: deepseek-harness
-          fetch-depth: 1
-
-      - name: Expose DSH source at the expected sibling path
-        run: ln -s "$GITHUB_WORKSPACE/deepseek-harness" "$GITHUB_WORKSPACE/../deepseek-harness"
-
       - name: Install pnpm
         uses: pnpm/action-setup@v4
         with:
@@ -59,12 +45,6 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
-
-      # The test resolver maps DSH package imports to the checked-out source.
-      # Give that sibling tree the workspace's direct test dependencies without
-      # installing the full DSH monorepo in every CI matrix job.
-      - name: Link DSH source test dependencies
-        run: ln -s "$GITHUB_WORKSPACE/packages/conversation-ui/node_modules" "$GITHUB_WORKSPACE/../deepseek-harness/node_modules"
 
       - name: Run checks
         run: pnpm run check

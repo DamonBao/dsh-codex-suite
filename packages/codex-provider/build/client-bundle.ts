@@ -16,10 +16,11 @@ export const CLIENT_EXTERNALS = [
   'react-dom/client',
   '@deepseek-ai/cordis',
   '@deepseek-ai/dsh-client-ui-slots',
-  '@deepseek-ai/dsh-client-web-react',
   '@deepseek-ai/dsh-client-ui-primitives',
-  '@deepseek-ai/dsh-client-runtime/client',
 ] as const
+
+/** Browser-safe dsh libraries the bundle inlines instead of sharing. */
+const INLINE_SAFE = /^@deepseek-ai\/dsh-client-store(\/|$)/
 
 /** Build one loader-compatible browser bundle with inline CSS Modules. */
 export function clientBundle(id: string, entry = 'src/client/index.ts'): UserConfig {
@@ -51,6 +52,7 @@ export function clientBundle(id: string, entry = 'src/client/index.ts'): UserCon
         resolveId(source: string) {
           if (!source.startsWith('@deepseek-ai/')) return null
           if (CLIENT_EXTERNALS.includes(source as (typeof CLIENT_EXTERNALS)[number])) return null
+          if (INLINE_SAFE.test(source)) return null
           throw new Error(
             `client bundle purity: ${JSON.stringify(source)} is not supplied by the Web shell; `
             + 'use a type-only import or a Cordis service instead',

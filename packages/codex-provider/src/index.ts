@@ -4,20 +4,25 @@
  * published from `./client` and discovered through the `dsh.client` manifest.
  */
 
+import { homedir } from 'node:os'
+import { access } from 'node:fs/promises'
+import { resolve as resolvePath } from 'node:path'
 import { createModels } from '@earendil-works/pi-ai'
-import type { Provider, Transport } from '@earendil-works/pi-ai'
+import type { AuthContext, Provider, Transport } from '@earendil-works/pi-ai'
 import { openaiCodexProvider } from '@earendil-works/pi-ai/providers/openai-codex'
 import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import type { AttachmentStore } from '@deepseek-ai/dsh-attachment'
 import type {} from '@deepseek-ai/dsh-client-connection'
-import { credentialRef } from '@deepseek-ai/dsh-credentials'
+import { credentialRef, isCredentialRefName } from '@deepseek-ai/dsh-credentials'
 import type { CredentialRef } from '@deepseek-ai/dsh-credentials'
+import { launchEnvironmentOf } from '@deepseek-ai/dsh-launch-environment'
 import { resolveRetryPolicy, RetryPolicySchema } from '@deepseek-ai/dsh-llm'
 import type { ResolvedRetryPolicy, RetryPolicyConfig } from '@deepseek-ai/dsh-llm'
 import { PiAiAdapter } from '@deepseek-ai/dsh-llm-pi-ai'
 import type { ResolvedPiAiProviderProfile } from '@deepseek-ai/dsh-llm-pi-ai'
-import { settingsNamespace } from '@deepseek-ai/dsh-settings'
+// Activates the ctx.settings Context merge used below.
+import type {} from '@deepseek-ai/dsh-settings'
 import { MAX_TIMER_DELAY_MS } from '@deepseek-ai/dsh-timeout'
 import { CodexAuthService, codexAuthModels } from './auth-service.ts'
 import { startCodexIpv6CallbackBridge } from './callback-bridge.ts'
@@ -55,6 +60,10 @@ export const DEFAULT_CODEX_TRANSPORT: Transport = 'sse'
 export const DEFAULT_STREAM_IDLE_TIMEOUT_MS = 300_000
 /** Default request-level base64 image payload bound required by dsh-llm-pi-ai. */
 const DEFAULT_MAX_REQUEST_IMAGE_BYTES = 20 * 1024 * 1024
+/** Default total-pixel request-image budget required by dsh-llm-pi-ai. */
+const DEFAULT_REQUEST_IMAGE_PIXEL_BUDGET = 2048 * 2048
+/** Default raw request-image byte target required by dsh-llm-pi-ai. */
+const DEFAULT_REQUEST_IMAGE_MAX_BYTES = 1024 * 1024
 
 /** User-configurable provider settings. */
 export interface Config {
@@ -82,7 +91,7 @@ export interface CodexProviderSettings {
 }
 
 /** Settings namespace written to `$DSH_HOME/settings.yaml`. */
-export const CODEX_SETTINGS_NAMESPACE = settingsNamespace('openai-codex')
+export const CODEX_SETTINGS_NAMESPACE = 'openai-codex'
 /** Restart-applied settings schema exposed to Harness configuration surfaces. */
 export const CodexProviderSettings: z<CodexProviderSettings> = z.object({
   proxyMode: CodexProxyModeSchema.default('auto'),
@@ -208,7 +217,9 @@ export function apply(ctx: Context, config: Config): void {
   )
   const refresher = new CodexTokenRefresher(authModels, credentials, auth, {
     // The same locked rotation pi-ai performs lazily, driven ahead of expiry.
-    refresh: credential => piOauth.refresh(credential),
+    // pi-ai 0.84 requires a caller signal; proactive rotation has no deadline
+    // of its own, so hand it one that never aborts.
+    refresh: credential => piOauth.refresh(credential, new AbortController().signal),
     proactive: resolved.proactiveRefresh,
     onRefreshFailure: (error) => {
       ctx.logger('dsh-codex-provider').warn(
@@ -225,6 +236,8 @@ export function apply(ctx: Context, config: Config): void {
     configuredMaxTokens: new Map(),
     streamIdleTimeoutMs: resolved.streamIdleTimeoutMs,
     maxRequestImageBytes: DEFAULT_MAX_REQUEST_IMAGE_BYTES,
+    requestImagePixelBudget: DEFAULT_REQUEST_IMAGE_PIXEL_BUDGET,
+    requestImageMaxBytes: DEFAULT_REQUEST_IMAGE_MAX_BYTES,
     retryPolicy: resolved.retryPolicy,
     transport: resolved.transport,
     ...resolved.timeoutMs === undefined ? {} : { timeoutMs: resolved.timeoutMs },
@@ -236,6 +249,7 @@ export function apply(ctx: Context, config: Config): void {
   const adapter = new PiAiAdapter({
     profiles: () => profiles,
     resolveApiKey: async () => (await refresher.getAuth(CODEX_PROVIDER))?.auth.apiKey,
+    auth: { credentials, authContext: codexAuthContext(ctx) },
     resolveAttachments: (): AttachmentStore | undefined => ctx.get('attachments'),
     onReplayDegrade: ({ provider, model, reason }) => {
       ctx.logger('dsh-codex-provider').warn(
@@ -278,9 +292,36 @@ export function apply(ctx: Context, config: Config): void {
       () => connectionCtx.connection.rpc.handle(
         CODEX_AUTH_RPC_CHANNEL,
         (_endpoint, _payload) => handleCodexAuthRpc(rpcService, _endpoint, _payload),
-        { authority: 'loopback' },
       ),
       '@jcy2387/dsh-codex-provider: account RPC',
     )
   })
+}
+
+/**
+ * Ambient auth resolution for pi-ai collections: credential references first,
+ * then the frozen launch environment, plus file probes for provider-native
+ * credential files. Mirrors the Harness pi-ai adapter's own context.
+ */
+function codexAuthContext(ctx: Context): AuthContext {
+  return {
+    async env(name) {
+      if (isCredentialRefName(name)) {
+        const hit = await ctx.credentials.resolve(credentialRef(name))
+        if (hit !== undefined) return hit.value
+      }
+      return launchEnvironmentOf(ctx).get(name)?.value
+    },
+    async fileExists(path) {
+      const expanded = path.startsWith('~/') || path === '~'
+        ? resolvePath(homedir(), path.slice(1).replace(/^\//, ''))
+        : path
+      try {
+        await access(expanded)
+        return true
+      } catch {
+        return false
+      }
+    },
+  }
 }

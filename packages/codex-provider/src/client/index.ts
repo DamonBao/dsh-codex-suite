@@ -1,8 +1,10 @@
 /** Browser half: native OpenAI Codex account management in Settings. */
 
-import type { ClientContext } from '@deepseek-ai/dsh-client-runtime/client'
+import type { Context as ClientContext } from '@deepseek-ai/cordis'
 import type { ConnectionHandle } from '@deepseek-ai/dsh-client-connection/client'
 import type {} from '@deepseek-ai/dsh-client-ui-settings/client'
+// Type-only: pulls the SlotRegistry service merge (ctx.slots).
+import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type {} from '@deepseek-ai/dsh-client-locale/client'
 import { createCodexAuthRpcClient } from '../rpc-contract.ts'
 import { CodexSettingsSection } from './CodexSettingsSection.tsx'
@@ -25,7 +27,7 @@ export const inject = ['slots', 'locale', 'connection']
 /** Register one removable, independently navigable Codex settings page. */
 export function apply(ctx: ClientContext): void {
   ctx.effect(() => ctx.locale.register(NS, { zh, en }), '@jcy2387/dsh-codex-provider: dictionaries')
-  const connection = ctx.get('connection') as ConnectionHandle
+  const connection = ctx.get('connection') as unknown as ConnectionHandle
   const controller = new CodexAuthCardController(createCodexAuthRpcClient(connection.rpc))
   const face: CodexSettingsInjected = {
     ...controller.face(connection.isLoopback),

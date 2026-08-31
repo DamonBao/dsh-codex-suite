@@ -1,6 +1,6 @@
-import type { ConversationNodeDefinition } from '@deepseek-ai/dsh-client-runtime/client'
-import { isAppendSurfaceEvent } from '@deepseek-ai/dsh-client-runtime/client'
-import type { TurnTailOwnerProps } from '@deepseek-ai/dsh-client-ui-conversation/client'
+import type { ConversationNodeDefinition } from '@deepseek-ai/dsh-client-ui-conversation/client'
+import { isAppendSurfaceEvent } from '@deepseek-ai/dsh-session/surface'
+import type { TurnTailOwnerProps } from '@deepseek-ai/dsh-client-ui-chat/client'
 
 export const DELIVERABLES_DATA_KEY = 'dsh-conversation-ui-deliverables' as const
 
@@ -16,7 +16,7 @@ export interface ConversationDeliverablesData {
   readonly entries: readonly DeliverableEntry[]
 }
 
-declare module '@deepseek-ai/dsh-client-runtime/client' {
+declare module '@deepseek-ai/dsh-client-ui-conversation/client' {
   interface ConversationTurnDataMap {
     'dsh-conversation-ui-deliverables': ConversationDeliverablesData
   }
@@ -25,7 +25,6 @@ declare module '@deepseek-ai/dsh-client-runtime/client' {
 interface CallRecord {
   readonly name: string
   readonly argsRaw: string | undefined
-  readonly view: unknown
 }
 
 interface DeliverablesState extends ConversationDeliverablesData {
@@ -62,37 +61,27 @@ function jsonArgs(argsRaw: string | undefined): UnknownRecord {
   }
 }
 
-function viewEntries(view: unknown): readonly Omit<DeliverableEntry, 'seq'>[] {
-  const object = record(view)
+/**
+ * Entries carried by a tool result's opaque `meta` payload. First-party file
+ * tools publish applied diffs there (`{ diffs: [{ path, oldText, newText }] }`),
+ * the same payload the native diff-card derivation reads.
+ */
+function metaEntries(meta: unknown): readonly Omit<DeliverableEntry, 'seq'>[] {
+  const object = record(meta)
   if (object === undefined) return []
-  const card = object.card
-  const locations = Array.isArray(object.locations) ? object.locations : []
-  const locationPaths = locations.flatMap(location => {
-    const path = stringValue(record(location)?.path)
-    return path === undefined ? [] : [path]
+  const diffs = Array.isArray(object.diffs) ? object.diffs : []
+  if (diffs.length === 0) return []
+  return diffs.flatMap(diff => {
+    const item = record(diff)
+    const path = stringValue(item?.path)
+    if (path === undefined) return []
+    return [{
+      path,
+      added: diffLines(item?.newText),
+      removed: diffLines(item?.oldText),
+      kind: 'file' as const,
+    }]
   })
-  if (card === 'diff') {
-    const diffs = Array.isArray(object.diffs) ? object.diffs : []
-    if (diffs.length === 0) return locationPaths.map(path => ({ path, added: 0, removed: 0, kind: 'file' as const }))
-    return diffs.flatMap(diff => {
-      const item = record(diff)
-      const path = stringValue(item?.path)
-      if (path === undefined) return []
-      return [{
-        path,
-        added: diffLines(item?.newText),
-        removed: diffLines(item?.oldText),
-        kind: 'file' as const,
-      }]
-    })
-  }
-  if (card === 'generic' && object.kind === 'edit') {
-    return locationPaths.map(path => ({ path, added: 0, removed: 0, kind: 'file' as const }))
-  }
-  const url = stringValue(object.url) ?? stringValue(object.href)
-  return url === undefined || !/^https?:\/\//i.test(url)
-    ? []
-    : [{ path: url, added: 0, removed: 0, kind: 'website' as const }]
 }
 
 function mutationPath(name: string, argsRaw: string | undefined): string | undefined {
@@ -165,8 +154,6 @@ function appendEntries(
 }
 
 function entriesForCall(call: CallRecord): readonly Omit<DeliverableEntry, 'seq'>[] {
-  const fromView = viewEntries(call.view)
-  if (fromView.length > 0) return fromView
   const path = mutationPath(call.name, call.argsRaw)
   if (path !== undefined) {
     const args = jsonArgs(call.argsRaw)
@@ -187,8 +174,11 @@ export const deliverablesDefinition: ConversationNodeDefinition<DeliverablesStat
   match: (event) => {
     if (event.type === 'turn/start') return { id: String(event.data.turn), role: 'start' }
     if (event.type === 'tool/call') return { id: String(event.data.turn), role: 'update' }
-    if (event.type === 'tool/result' && isAppendSurfaceEvent(event)) {
-      return { id: String(event.data.turn), role: 'update' }
+    if (event.type === 'tool/result') {
+      // Capture the turn while the event is still cleanly narrowed; the
+      // surface guard below intersects the union and would widen `.data`.
+      const turn = event.data.turn
+      if (isAppendSurfaceEvent(event)) return { id: String(turn), role: 'update' }
     }
     return null
   },
@@ -199,10 +189,9 @@ export const deliverablesDefinition: ConversationNodeDefinition<DeliverablesStat
   update: (context, match) => {
     if (match.event.type === 'tool/call') {
       const calls = new Map(context.state.calls)
-      const view = match.view?.for === 'call' ? match.view.view : null
       const name = stringValue(match.event.data.name) ?? ''
       const argsRaw = stringValue(match.event.data.arguments)
-      calls.set(String(match.event.data.callId), { name, argsRaw, view })
+      calls.set(String(match.event.data.callId), { name, argsRaw })
       return { ...context.state, calls }
     }
     if (match.event.type !== 'tool/result') return context.state
@@ -210,9 +199,8 @@ export const deliverablesDefinition: ConversationNodeDefinition<DeliverablesStat
     const callId = String(match.event.data.message.source.callId)
     const call = context.state.calls.get(callId)
     if (call === undefined) return context.state
-    const resultView = match.view?.for === 'result' ? match.view.view : call.view
-    const fromView = viewEntries(resultView)
-    const fromCall = fromView.length > 0 ? fromView : entriesForCall({ ...call, view: resultView })
+    const fromMeta = metaEntries(match.event.data.meta)
+    const fromCall = fromMeta.length > 0 ? fromMeta : entriesForCall(call)
     const fromResult = resultWebsiteEntries(call.name, match.event.data.message)
     const entries = appendEntries(context.state.entries, [...fromCall, ...fromResult], match.event.seq)
     const unchanged = entries.length === context.state.entries.length

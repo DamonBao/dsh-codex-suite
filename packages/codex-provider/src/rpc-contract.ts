@@ -1,6 +1,6 @@
 /** Browser-safe dedicated Connection RPC contract owned by this plugin. */
 
-import type { RpcResult } from '@deepseek-ai/dsh-host-apiproxy/api'
+import type { ConnectionRpcResult } from '@deepseek-ai/dsh-client-connection'
 import type {
   CodexAuthFailureReason,
   CodexAuthState,
@@ -13,6 +13,9 @@ import type {
   CodexUsageSnapshot,
   CodexUsageWindow,
 } from './types.ts'
+
+/** Carrier-neutral result shape shared by both halves of this channel. */
+export type RpcResult<T> = ConnectionRpcResult<T>
 
 /** Logical channel registered by the Host half and called by the browser half. */
 export const CODEX_AUTH_RPC_CHANNEL = '/dsh-codex-provider'

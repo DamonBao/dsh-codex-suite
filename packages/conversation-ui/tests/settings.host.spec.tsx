@@ -5,8 +5,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { Context } from '@deepseek-ai/cordis'
-import type { ConnectionRpcHandler, ConnectionRpcHandlerOptions } from '@deepseek-ai/dsh-client-connection'
-import { SettingsProvider, settingsNamespace, type SettingsNamespace } from '@deepseek-ai/dsh-settings'
+import type { ConnectionRpcHandler } from '@deepseek-ai/dsh-client-connection'
+import { SettingsProvider, type SettingsNamespace } from '@deepseek-ai/dsh-settings'
 import { afterEach, describe, expect, it } from 'vitest'
 import { CONVERSATION_PACKAGE_NAME, CONVERSATION_PACKAGE_VERSION } from '../src/package-meta.ts'
 import { apply, Config } from '../src/plugin.ts'
@@ -25,7 +25,6 @@ class MemorySettings extends SettingsProvider {
 interface RpcRegistration {
   channel: string
   handler: ConnectionRpcHandler
-  options: ConnectionRpcHandlerOptions
 }
 
 const tempProfiles = new Set<string>()
@@ -59,8 +58,8 @@ async function mountHost(baseUrl: string): Promise<{
   let removeCalls = 0
   ctx.provide('connection', {
     rpc: {
-      handle(channel: string, handler: ConnectionRpcHandler, options: ConnectionRpcHandlerOptions): () => Promise<void> {
-        registration = { channel, handler, options }
+      handle(channel: string, handler: ConnectionRpcHandler): () => Promise<void> {
+        registration = { channel, handler }
         return async () => { removeCalls += 1 }
       },
     },
@@ -89,7 +88,7 @@ describe('conversation-ui host settings', () => {
     const fiber = ctx.plugin({ apply, Config })
     await fiber.await()
 
-    const ns = settingsNamespace(CONVERSATION_SETTINGS_NS)
+    const ns = CONVERSATION_SETTINGS_NS
     expect(ctx.settings.get(ns)).toEqual(DEFAULT_CONVERSATION_SETTINGS)
 
     await ctx.settings.update(ns, { thinkAutoExpand: false })
@@ -105,7 +104,6 @@ describe('conversation-ui host settings', () => {
     const { ctx, fiber, registration, removed } = await mountHost(profileBaseUrl(`link:${process.cwd()}`))
 
     expect(registration.channel).toBe(CONVERSATION_SETTINGS_RPC_CHANNEL)
-    expect(registration.options).toEqual({ authority: 'loopback' })
     const initial = await registration.handler(CONVERSATION_SETTINGS_RPC.read, {}, signal())
     expect(initial).toEqual({
       ok: true,
@@ -120,7 +118,7 @@ describe('conversation-ui host settings', () => {
 
     const updated = await registration.handler(CONVERSATION_SETTINGS_RPC.write, { thinkAutoExpand: false }, signal())
     expect(updated).toMatchObject({ ok: true, value: { thinkAutoExpand: false } })
-    expect(ctx.settings.get(settingsNamespace(CONVERSATION_SETTINGS_NS))).toEqual({ thinkAutoExpand: false })
+    expect(ctx.settings.get(CONVERSATION_SETTINGS_NS)).toEqual({ thinkAutoExpand: false })
 
     const malformed = await registration.handler(CONVERSATION_SETTINGS_RPC.write, { thinkAutoExpand: 'false' }, signal())
     expect(malformed).toMatchObject({ ok: false, error: { code: 'settings-rejected' } })

@@ -1,6 +1,6 @@
 /** Host dispatcher for the plugin-owned Connection RPC channel. */
 
-import type { RpcResult } from '@deepseek-ai/dsh-host-apiproxy/api'
+import type { RpcResult } from './rpc-contract.ts'
 import type {
   CodexAuthState,
   CodexLoginMethod,

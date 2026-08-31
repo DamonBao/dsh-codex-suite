@@ -7,7 +7,7 @@
 
 [English](README.md) | 简体中文
 
-为 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)（DSH）打造的插件套件：把 **ChatGPT / OpenAI Codex 模型**和 **Codex 风格的对话体验**带进 DSH Web UI。
+为 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)（DSH）打造的插件套件：把 **ChatGPT / OpenAI Codex 模型**和 **Codex 风格的对话体验**带进 DSH Web UI。基于 DSH `0.1.2-alpha.2` 构建（peer 范围 `>=0.1.2-alpha.2 <0.2.0`）。
 
 本仓库是 pnpm monorepo，包含两个相互独立的运行时插件和一个纯组合包：
 
@@ -128,7 +128,7 @@ dsh web
 - **Host 半**（Node）—— Cordis 插件：Provider 注册、OAuth 生命周期、网络与设置持久化，从包根加载。
 - **Web 半**（浏览器）—— 通过 `dsh.client` manifest 发现的 React 视图。Codex Provider 提供设置分区；Conversation UI 替换助手节点视图并包装工具行。
 
-两半之间只通过两条窄通道通信：注入到 HTML 的**启动配置全局变量**（`window.__DSH_CONVERSATION_UI_CONFIG__`）把校验后的插件配置带给浏览器；**loopback 权限 RPC** 把设置读写带回 Host。机密信息（令牌、代理地址）绝不跨越 RPC 边界。
+两半之间只通过两条窄通道通信：注入到 HTML 的**启动配置全局变量**（`window.__DSH_CONVERSATION_UI_CONFIG__`）把校验后的插件配置带给浏览器；**经鉴权的 Connection RPC** 把设置读写带回 Host。机密信息（令牌、代理地址）绝不跨越 RPC 边界。
 
 各包详细文档：[codex-provider](packages/codex-provider/README.zh.md) · [conversation-ui](packages/conversation-ui/README.md) · [suite](packages/all/README.md)
 
@@ -151,7 +151,7 @@ pnpm --filter @jcy2387/dsh-conversation-ui build
 pnpm --dir packages/all pack --dry-run
 ```
 
-测试基于 [vitest](https://vitest.dev)，共 13 个套件，覆盖 OAuth 状态机、令牌刷新、网络/代理探测、用量解析、设置控制器和流式客户端视图。CI 还会在固定版本上检出 DSH 源码树供测试解析，校验发布 tag 与三个包版本一致，并审计发布 tarball 的内容。
+测试基于 [vitest](https://vitest.dev)，共 14 个套件，覆盖 OAuth 状态机、令牌刷新、网络/代理探测、用量解析、设置控制器和流式客户端视图。客户端测试直接解析已安装的 DSH 发布包（用一个小型 module-table 替身实例化其浏览器 factory bundle）。CI 会校验发布 tag 与三个包版本一致，并审计发布 tarball 的内容。
 
 ### 仓库结构
 
@@ -161,7 +161,7 @@ pnpm --dir packages/all pack --dry-run
 │  ├─ codex-provider/     # @jcy2387/dsh-codex-provider
 │  │  ├─ src/             # Host 半：OAuth、刷新、网络、用量、LLM 适配器
 │  │  ├─ src/client/      # Web 半：设置分区 UI
-│  │  ├─ tests/           # 10 个 vitest 套件
+│  │  ├─ tests/           # 11 个 vitest 套件
 │  │  └─ cordis.patch.yml
 │  ├─ conversation-ui/    # @jcy2387/dsh-conversation-ui
 │  │  ├─ src/             # Host 半：配置桥、设置 RPC

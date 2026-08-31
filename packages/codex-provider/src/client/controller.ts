@@ -1,7 +1,7 @@
 /** Browser projection of the Host-owned authentication RPC. */
 
-import { createSnapshotStore } from '@deepseek-ai/dsh-client-runtime/client'
-import type { SnapshotStore } from '@deepseek-ai/dsh-client-runtime/client'
+import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
+import type { SnapshotStore } from '@deepseek-ai/dsh-client-store'
 import type { CodexAuthRpcClient } from '../rpc-contract.ts'
 import type {
   CodexAuthState,

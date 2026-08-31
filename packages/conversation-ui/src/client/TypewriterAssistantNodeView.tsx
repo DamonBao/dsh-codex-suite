@@ -3,7 +3,10 @@ import {
   JsonBlock,
   MarkdownText,
 } from '@deepseek-ai/dsh-client-ui-primitives'
-import type { ChatNodeViewProps, TurnTailOwnerProps } from '@deepseek-ai/dsh-client-ui-conversation/client'
+import type { MarkdownLabels } from '@deepseek-ai/dsh-client-ui-primitives'
+import type { ChatNodeViewProps, TurnTailOwnerProps } from '@deepseek-ai/dsh-client-ui-chat/client'
+// Type-only: the SessionStandardProps merge delivering `sessionId`.
+import type {} from '@deepseek-ai/dsh-client-ui-session/client'
 import { useConversationContent, type ConversationSmoothingPreset } from './useConversationContent.ts'
 import { useFpsGuard } from './useFpsGuard.ts'
 import { FollowHost } from './FollowHost.tsx'
@@ -14,7 +17,7 @@ import { formatTurnElapsed, formatTurnProcessed } from './turnElapsed.ts'
 import css from './TypewriterAssistantNodeView.module.css'
 
 type AssistantProps = ChatNodeViewProps<'assistant-step'>
-type MarkdownProps = Pick<ComponentProps<typeof MarkdownText>, 'codeLabels' | 'fileMentions' | 'text'>
+type MarkdownProps = Pick<ComponentProps<typeof MarkdownText>, 'labels' | 'fileMentions' | 'text'>
 
 function usePrefersReducedMotion(): boolean {
   const [reduced, setReduced] = useState(
@@ -56,7 +59,7 @@ interface AnimatedMarkdownTextProps extends MarkdownProps {
  */
 function AnimatedMarkdownText({
   text,
-  codeLabels,
+  labels,
   fileMentions,
   streaming,
   announce,
@@ -98,7 +101,7 @@ function AnimatedMarkdownText({
           maxSpeedPxPerSec={maxScrollSpeedPxPerSec}
         >
           <div className={css.markdownFlow}>
-            <MarkdownText text={shown} streaming codeLabels={codeLabels} />
+            <MarkdownText text={shown} streaming labels={labels} />
           </div>
         </FollowHost>
       </>
@@ -106,7 +109,7 @@ function AnimatedMarkdownText({
   }
   return (
     <div className={css.markdownFlow}>
-      <MarkdownText text={text} codeLabels={codeLabels} fileMentions={fileMentions} />
+      <MarkdownText text={text} labels={labels} fileMentions={fileMentions} />
     </div>
   )
 }
@@ -119,6 +122,7 @@ function AnimatedMarkdownText({
  */
 function AnimatedReasoning({
   text,
+  labels,
   running,
   mode,
   preset,
@@ -126,6 +130,7 @@ function AnimatedReasoning({
   shouldHoldBack,
 }: {
   text: string
+  labels: MarkdownLabels
   running: boolean
   mode: ConversationMode
   preset: ConversationSmoothingPreset
@@ -154,7 +159,7 @@ function AnimatedReasoning({
       data-stream-state={running ? 'running' : 'settled'}
       data-stream-reasoning=""
     >
-      {live ? <MarkdownText text={shown} streaming /> : <MarkdownText text={text} />}
+      {live ? <MarkdownText text={shown} streaming labels={labels} /> : <MarkdownText text={text} labels={labels} />}
     </div>
   )
 }
@@ -213,7 +218,10 @@ export const TypewriterAssistantNodeView = memo(function TypewriterAssistantNode
     () => owner === undefined ? undefined : fileMentions(owner),
     [fileMentions, owner],
   )
-  const codeLabels = useMemo(() => ({ copyLabel: t('copy'), copiedLabel: t('copied') }), [t])
+  const labels = useMemo<MarkdownLabels>(() => ({
+    code: { copyLabel: t('copy'), copiedLabel: t('copied') },
+    footnotes: t('markdown.footnotes'),
+  }), [t])
   const hasVisible = streaming
     || data.status === 'interrupted'
     || data.blocks.some(block => block.kind !== 'tool-call')
@@ -257,7 +265,7 @@ export const TypewriterAssistantNodeView = memo(function TypewriterAssistantNode
           <AnimatedMarkdownText
             key={index}
             text={block.text}
-            codeLabels={codeLabels}
+            labels={labels}
             fileMentions={mentions}
             streaming={streaming}
             announce={index === last}
@@ -277,6 +285,7 @@ export const TypewriterAssistantNodeView = memo(function TypewriterAssistantNode
             <AnimatedReasoning
               key={index}
               text={block.text}
+              labels={labels}
               running={streaming && index === last}
               mode={mode}
               preset={preset}
