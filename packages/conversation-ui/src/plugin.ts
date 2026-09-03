@@ -55,8 +55,7 @@ export const ConversationSettingsSchema: Schema<ConversationSettings> = Schema.o
 export function apply(ctx: Context, config: Config): void {
   console.log(
     `[dsh-conversation-ui] plugin loaded! mode=${config.mode} preset=${config.preset} `
-    + `seed=${config.revealCharsPerSec}cps scroll=${config.scrollSpeedPxPerSec}px/s `
-    + `maxScroll=${config.maxScrollSpeedPxPerSec}px/s`,
+    + `seed=${config.revealCharsPerSec}cps scroll=native`,
   )
   ctx.inject(['webServer'], (httpCtx) => {
     httpCtx.effect(

@@ -5,7 +5,7 @@
 
 English | [简体中文](README.md)
 
-A Codex-style conversation UI enhancement plugin for DeepSeek Harness (DSH): the Web chat is re-rendered as one ordered event stream — process updates, thinking, tool activity, retries, workflows, and the final answer appear in the order they happened, while viewport follow stays smooth. This package is the Conversation UI package of the [DSH Codex Suite](../../README.md) monorepo.
+A Codex-style conversation UI enhancement plugin for DeepSeek Harness (DSH): the Web chat is re-rendered as one ordered event stream — process updates, thinking, tool activity, retries, workflows, and the final answer appear in the order they happened, while DSH retains authoritative viewport control. This package is the Conversation UI package of the [DSH Codex Suite](../../README.md) monorepo.
 
 **The package is fully independent from the Codex Provider** and can be installed alone to enhance conversations with any model.
 
@@ -25,16 +25,15 @@ A Codex-style conversation UI enhancement plugin for DeepSeek Harness (DSH): the
 
 | Mode | Behavior |
 | --- | --- |
-| `teleprompter` (default) | Content appears as instant snapshots that glide smoothly upward — read it like a teleprompter. |
+| `teleprompter` (default) | The latest model snapshot appears immediately, with no extra character-reveal queue. |
 | `typewriter` | Progressive reveal by grapheme cluster, safe for CJK text and emoji. |
 
 - Three smoothing presets: `realtime` (snappier), `balanced` (default), `silky` (extra smooth). Presets shape the reveal cadence — EMA-smoothed arrival rate, buffer targets, catch-up ceilings, and the settle drain after the input idles — so long replies never dump whole paragraphs at once and fast streams never stutter.
 - `typewriter` mode also exposes a fixed reveal rate via `revealCharsPerSec`.
 
-### Smart viewport follow
+### Streaming viewport cooperation
 
-- New content is followed smoothly within speed bounds: at least `scrollSpeedPxPerSec`, at most `maxScrollSpeedPxPerSec` (a large lag never teleports).
-- Scrolling upward to read **releases the follow**; returning to the bottom resumes it.
+- Current DSH `ChatView` exclusively owns per-session restoration, bottom-follow, and reader unpinning. The plugin no longer writes `scrollTop` or row transforms, avoiding ownership races during session switches.
 - Respects `prefers-reduced-motion`; when the frame rate degrades, an FPS guard skips DOM commits for offscreen replies so visible frames stay fluid.
 
 ### Deliverables card
@@ -76,8 +75,8 @@ Profile patch ID: `conversation-ui`. Set values in the profile's `cordis.patch.y
 | `mode` | `teleprompter` \| `typewriter` | `teleprompter` | Reveal style of assistant content. |
 | `preset` | `realtime` \| `balanced` \| `silky` | `balanced` | Smoothing cadence preset. |
 | `revealCharsPerSec` | 5–200 | `80` | Fixed reveal rate for `typewriter` mode. |
-| `scrollSpeedPxPerSec` | 1–200 | `48` | Minimum viewport-follow speed. |
-| `maxScrollSpeedPxPerSec` | 1–2000 | `1000` | Follow speed ceiling; prevents teleporting after a large lag. |
+| `scrollSpeedPxPerSec` | 1–200 | `48` | Deprecated; retained for old Profile compatibility. DSH owns scrolling. |
+| `maxScrollSpeedPxPerSec` | 1–2000 | `1000` | Deprecated; retained for old Profile compatibility. DSH owns scrolling. |
 
 Overlay example:
 
@@ -106,7 +105,7 @@ The package ships a [`conversation-ui-off.yml`](conversation-ui-off.yml) overlay
 The package ships two halves that cooperate over one very narrow config channel:
 
 - **Host half** (`src/`): a Cordis plugin. It validates the config schema, injects the validated value into every served index HTML (the boot global `window.__DSH_CONVERSATION_UI_CONFIG__`), and registers the user-settings namespace plus a loopback-only settings RPC (read/write preferences, report installation kind, trigger an npm update).
-- **Web half** (`src/client/`): React views. It registers at low priority to shadow the `assistant-step` node view with the Codex-style presentation, wraps every other growing chat row (tool cards, retries, workflows…) in place so they share the follow engine, adds the turn-tail deliverables card, and mounts the plugin configuration card in Settings. The stream still renders with defaults when locale, connection, or the settings service is absent.
+- **Web half** (`src/client/`): React views. It registers at low priority to shadow Assistant and Turn-process presentation, wraps other chat rows (tool cards, retries, workflows…) in place while delegating all scrolling to DSH `ChatView`, adds the turn-tail deliverables card, and mounts the plugin configuration card in Settings. The stream still renders with defaults when locale, connection, or the settings service is absent.
 
 ## Development
 
@@ -116,7 +115,7 @@ pnpm --filter @jcy2387/dsh-conversation-ui test
 pnpm --filter @jcy2387/dsh-conversation-ui build
 ```
 
-Tests run on vitest + Testing Library, covering the stream-smoothing hook, follow and folding behavior, and the settings card (both client and host sides). See the [monorepo README](../../README.md) for workspace-wide commands.
+Tests run on vitest + Testing Library, covering stream smoothing, native scroll delegation, Turn folding, and the settings card (both client and host sides). See the [monorepo README](../../README.md) for workspace-wide commands.
 
 ## License
 

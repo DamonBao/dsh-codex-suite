@@ -1,10 +1,13 @@
-import { useRef, type ReactNode } from 'react'
-import { useConversationFollow } from './teleprompterGlide.ts'
+import type { ReactNode } from 'react'
 import css from './TypewriterAssistantNodeView.module.css'
 
 /**
- * Document-flow host that owns conversation-port follow while `active`.
- * Shared by assistant blocks and every other growing Chat row.
+ * Structural host for streaming content.
+ *
+ * Current DSH ChatView is the sole owner of session scroll restoration,
+ * reader unpinning, and live bottom-follow. The plugin intentionally performs
+ * no scrollTop or transform writes here; doing so would race ChatView's private
+ * scroll ledger when switching between sessions.
  */
 export function FollowHost({
   active,
@@ -19,7 +22,10 @@ export function FollowHost({
   maxSpeedPxPerSec?: number | undefined
   children: ReactNode
 }) {
-  const rootRef = useRef<HTMLDivElement>(null)
-  useConversationFollow(rootRef, active, speedCpsRef, minSpeedPxPerSec, maxSpeedPxPerSec)
-  return <div ref={rootRef} className={css.follow}>{children}</div>
+  // Retain the established component contract for configuration compatibility;
+  // current DSH owns scrolling, so these legacy motion values are ignored.
+  void speedCpsRef
+  void minSpeedPxPerSec
+  void maxSpeedPxPerSec
+  return <div className={css.follow} data-stream-follow={active || undefined}>{children}</div>
 }

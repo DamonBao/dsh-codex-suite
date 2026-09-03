@@ -17,11 +17,12 @@ import {
   StateDot,
   type IconProps,
 } from '@deepseek-ai/dsh-client-ui-primitives'
+import type { TurnProcessOwnerProps } from '@deepseek-ai/dsh-client-ui-chat/client'
 import { FollowHost } from './FollowHost.tsx'
 import { ToolActivityGroupHeader, ToolActivityGroupMember, toolActivityGroupId, type ToolActivityGroupInfo } from './ToolActivityGroup.tsx'
-import { TurnProcessMember } from './TurnProcessMember.tsx'
-import { turnProcessMemberId, type TurnFoldAddress } from './turnProcessFold.ts'
-import { formatTurnProcessed, type TurnElapsedTranslator } from './turnElapsed.ts'
+import { isFallbackProcessMember, loadedProcessStart } from './turnProcessFallback.ts'
+import { useCompactTranscript } from './TranscriptViewBridge.tsx'
+import { useChatSeatHidden } from './useChatSeatHidden.ts'
 import css from './TypewriterAssistantNodeView.module.css'
 
 /** Props forwarded through a follow wrap; extra kit seats pass through. */
@@ -227,6 +228,26 @@ function visibleNode(node: unknown): boolean {
   return !('visibility' in node) || (node as { visibility: unknown }).visibility === 'visible'
 }
 
+function chatParts(snapshot: unknown): {
+  readonly order: readonly unknown[]
+  readonly get: (key: string) => unknown
+  readonly timeline?: unknown
+} | undefined {
+  if (snapshot === null || typeof snapshot !== 'object') return undefined
+  const candidate = 'chat' in snapshot ? (snapshot as { chat: unknown }).chat : snapshot
+  if (candidate === null || typeof candidate !== 'object' || !('order' in candidate) || !('nodes' in candidate)) return undefined
+  const order = (candidate as { order: unknown }).order
+  const nodes = (candidate as { nodes: unknown }).nodes
+  if (!Array.isArray(order) || nodes === null || typeof nodes !== 'object' || !('get' in nodes)) return undefined
+  const get = (nodes as { get: unknown }).get
+  if (typeof get !== 'function') return undefined
+  return {
+    order,
+    get: (key: string) => get.call(nodes, key),
+    timeline: 'timeline' in candidate ? (candidate as { timeline: unknown }).timeline : undefined,
+  }
+}
+
 function sameActivityGroupNode(
   node: unknown,
   nodeKind: string,
@@ -250,29 +271,23 @@ function activityGroup(
   label: string,
   requiresTurn: boolean,
 ): ToolActivityGroupInfo | undefined {
-  if (snapshot === null || typeof snapshot !== 'object' || !('chat' in snapshot)) return undefined
-  const chat = (snapshot as { chat: unknown }).chat
-  if (chat === null || typeof chat !== 'object' || !('order' in chat) || !('nodes' in chat)) return undefined
-  const order = (chat as { order: unknown }).order
-  const nodes = (chat as { nodes: unknown }).nodes
-  if (!Array.isArray(order) || nodes === null || typeof nodes !== 'object' || !('get' in nodes)) return undefined
-  const get = (nodes as { get: unknown }).get
-  if (typeof get !== 'function') return undefined
-  const currentIndex = order.indexOf(currentKey)
+  const chat = chatParts(snapshot)
+  if (chat === undefined) return undefined
+  const currentIndex = chat.order.indexOf(currentKey)
   if (currentIndex === -1) return undefined
   const read = (index: number): unknown => {
-    const key = order[index]
-    return typeof key === 'string' ? get.call(nodes, key) : undefined
+    const key = chat.order[index]
+    return typeof key === 'string' ? chat.get(key) : undefined
   }
   const same = (node: unknown) => sameActivityGroupNode(node, nodeKind, turn, semantic, requiresTurn)
   if (!same(read(currentIndex))) return undefined
   let first = currentIndex
   let last = currentIndex
   while (first > 0 && same(read(first - 1))) first -= 1
-  while (last + 1 < order.length && same(read(last + 1))) last += 1
+  while (last + 1 < chat.order.length && same(read(last + 1))) last += 1
   const count = last - first + 1
   if (count < 2) return undefined
-  const firstKey = order[first]
+  const firstKey = chat.order[first]
   if (typeof firstKey !== 'string') return undefined
   let hasGrowing = false
   for (let index = first; index <= last; index += 1) {
@@ -330,7 +345,7 @@ export function nativeActivityGroup(
     kind,
     kind,
     label,
-    false,
+    true,
   )
 }
 
@@ -481,7 +496,10 @@ const KEEP_VISIBLE_KINDS = new Set(['turn-tail', 'turn-error', 'turn-max-tokens'
 
 interface TurnDetails {
   readonly turn: number
-  readonly startTime: number | undefined
+}
+
+interface TurnAddress {
+  readonly turn: number
 }
 
 function turnDetailsFromNode(node: unknown): TurnDetails | undefined {
@@ -494,20 +512,12 @@ function turnDetailsFromNode(node: unknown): TurnDetails | undefined {
   if (turn === null || typeof turn !== 'object' || !('turn' in turn)) return undefined
   const turnNumber = (turn as { turn: unknown }).turn
   if (typeof turnNumber !== 'number') return undefined
-  const start = 'start' in turn ? (turn as { start: unknown }).start : undefined
-  const startTime = start !== null
-    && typeof start === 'object'
-    && 'time' in start
-    && typeof (start as { time: unknown }).time === 'number'
-      ? (start as { time: number }).time
-      : undefined
-  return { turn: turnNumber, startTime }
+  return { turn: turnNumber }
 }
 
-function processAddress(node: unknown, sessionId: unknown): TurnFoldAddress | undefined {
-  if (typeof sessionId !== 'string') return undefined
+function processAddress(node: unknown): TurnAddress | undefined {
   const details = turnDetailsFromNode(node)
-  return details === undefined ? undefined : { sessionId, turn: details.turn }
+  return details === undefined ? undefined : { turn: details.turn }
 }
 
 function nodeKey(node: unknown): string | undefined {
@@ -516,56 +526,24 @@ function nodeKey(node: unknown): string | undefined {
   return typeof key === 'string' ? key : undefined
 }
 
-function nodeOrder(node: unknown): number {
-  if (node === null || typeof node !== 'object' || !('anchorSeq' in node)) return 0
-  const anchorSeq = (node as { anchorSeq: unknown }).anchorSeq
-  return typeof anchorSeq === 'number' ? anchorSeq : 0
-}
-
-function followingTurn(snapshot: unknown, currentKey: string): TurnDetails | undefined {
-  if (snapshot === null || typeof snapshot !== 'object' || !('chat' in snapshot)) return undefined
-  const chat = (snapshot as { chat: unknown }).chat
-  if (chat === null || typeof chat !== 'object' || !('order' in chat) || !('nodes' in chat)) return undefined
-  const order = (chat as { order: unknown }).order
-  const nodes = (chat as { nodes: unknown }).nodes
-  if (!Array.isArray(order) || nodes === null || typeof nodes !== 'object' || !('get' in nodes)) return undefined
-  const get = (nodes as { get: unknown }).get
-  if (typeof get !== 'function') return undefined
-  const start = order.indexOf(currentKey)
-  if (start === -1) return undefined
-  for (let index = start + 1; index < order.length; index += 1) {
-    const key = order[index]
-    if (typeof key !== 'string') continue
-    const turn = turnDetailsFromNode(get.call(nodes, key))
-    if (turn !== undefined) return turn
-  }
-  return undefined
-}
-
 /**
  * Keep the latest settled Tool visibly active while the Agent is still
  * running but has not published its next Chat row yet. A later visible row
  * ends this handoff state; `turn-tail` is presentation metadata rather than
  * the next piece of model/process output.
  */
-function isAwaitingNextTurnNode(snapshot: unknown, currentKey: string, turnNumber: number): boolean {
-  if (
-    snapshot === null
-    || typeof snapshot !== 'object'
-    || !('running' in snapshot)
-    || (snapshot as { running: unknown }).running !== true
-    || !('chat' in snapshot)
-  ) return false
-  const chat = (snapshot as { chat: unknown }).chat
-  if (chat === null || typeof chat !== 'object' || !('order' in chat) || !('nodes' in chat)) return false
-  const order = (chat as { order: unknown }).order
-  const nodes = (chat as { nodes: unknown }).nodes
-  if (!Array.isArray(order) || nodes === null || typeof nodes !== 'object' || !('get' in nodes)) return false
-  const get = (nodes as { get: unknown }).get
-  if (typeof get !== 'function') return false
+function isAwaitingNextTurnNode(
+  snapshot: unknown,
+  running: boolean,
+  currentKey: string,
+  turnNumber: number,
+): boolean {
+  if (!running) return false
+  const chat = chatParts(snapshot)
+  if (chat === undefined) return false
 
-  if ('timeline' in chat) {
-    const timeline = (chat as { timeline: unknown }).timeline
+  if (chat.timeline !== undefined) {
+    const timeline = chat.timeline
     if (timeline !== null && typeof timeline === 'object' && 'turns' in timeline) {
       const turns = (timeline as { turns: unknown }).turns
       if (turns instanceof Map) {
@@ -581,12 +559,12 @@ function isAwaitingNextTurnNode(snapshot: unknown, currentKey: string, turnNumbe
     }
   }
 
-  const currentIndex = order.indexOf(currentKey)
+  const currentIndex = chat.order.indexOf(currentKey)
   if (currentIndex === -1) return false
-  for (let index = currentIndex + 1; index < order.length; index += 1) {
-    const key = order[index]
+  for (let index = currentIndex + 1; index < chat.order.length; index += 1) {
+    const key = chat.order[index]
     if (typeof key !== 'string') continue
-    const candidate = get.call(nodes, key)
+    const candidate = chat.get(key)
     if (candidate === null || typeof candidate !== 'object') continue
     if ('visibility' in candidate && (candidate as { visibility: unknown }).visibility !== 'visible') continue
     if ('kind' in candidate && (candidate as { kind: unknown }).kind === 'turn-tail') continue
@@ -624,22 +602,24 @@ export function isGrowingChatNode(node: unknown): boolean {
 }
 
 /**
- * Wrap a prior Chat node renderer so a growing row shares conversation
- * follow. Presentation stays with the wrapped component; kit seats
- * (`renderSlot`, locale, inject) pass through unchanged.
+ * Wrap a prior Chat node renderer with Codex activity presentation while DSH
+ * retains exclusive scroll ownership. Kit seats (`renderSlot`, locale, inject)
+ * pass through unchanged.
  * @param Inner - The already-registered row component.
- * @returns A follow-hosted row.
+ * @returns A structurally hosted row.
  */
 export function wrapFollowNodeView(Inner: ComponentType<FollowWrapProps>, motion: FollowMotionConfig = {}) {
   return function TypewriterFollowNodeView(props: FollowWrapProps) {
     const kind = chatNodeKind(props.node)
-    const directAddress = KEEP_VISIBLE_KINDS.has(kind) ? undefined : processAddress(props.node, props.sessionId)
+    const directAddress = KEEP_VISIBLE_KINDS.has(kind) ? undefined : processAddress(props.node)
     const key = nodeKey(props.node)
+    const useChat = props.useChat
     const useSession = props.useSession
     if (
       directAddress !== undefined
       && kind === 'tool-call'
       && key !== undefined
+      && typeof useChat === 'function'
       && typeof useSession === 'function'
     ) {
       return (
@@ -649,24 +629,7 @@ export function wrapFollowNodeView(Inner: ComponentType<FollowWrapProps>, motion
           props={props}
           address={directAddress}
           nodeKey={key}
-          useSession={useSession as (selector: (snapshot: unknown) => unknown) => unknown}
-        />
-      )
-    }
-    if (
-      directAddress === undefined
-      && !KEEP_VISIBLE_KINDS.has(kind)
-      && key !== undefined
-      && typeof props.sessionId === 'string'
-      && typeof useSession === 'function'
-    ) {
-      return (
-        <InferredTurnFollowNodeView
-          Inner={Inner}
-          motion={motion}
-          props={props}
-          nodeKey={key}
-          sessionId={props.sessionId}
+          useChat={useChat as (selector: (snapshot: unknown) => unknown) => unknown}
           useSession={useSession as (selector: (snapshot: unknown) => unknown) => unknown}
         />
       )
@@ -681,26 +644,32 @@ function TailAwareToolFollowNodeView({
   props,
   address,
   nodeKey: currentKey,
+  useChat,
   useSession,
 }: {
   readonly Inner: ComponentType<FollowWrapProps>
   readonly motion: FollowMotionConfig
   readonly props: FollowWrapProps
-  readonly address: TurnFoldAddress
+  readonly address: TurnAddress
   readonly nodeKey: string
+  readonly useChat: (selector: (snapshot: unknown) => unknown) => unknown
   readonly useSession: (selector: (snapshot: unknown) => unknown) => unknown
 }) {
-  const awaitingNext = useSession(snapshot => isAwaitingNextTurnNode(snapshot, currentKey, address.turn)) as boolean
+  const running = useSession(snapshot => snapshot !== null
+    && typeof snapshot === 'object'
+    && 'running' in snapshot
+    && (snapshot as { running: unknown }).running === true) as boolean
+  const awaitingNext = useChat(snapshot => isAwaitingNextTurnNode(snapshot, running, currentKey, address.turn)) as boolean
   const presentation = toolPresentation(props.node)
-  const group = typeof props.sessionId === 'string' && presentation !== null
-    ? useSession(snapshot => toolActivityGroup(
+  const group = useChat(snapshot => typeof props.sessionId === 'string' && presentation !== null
+    ? toolActivityGroup(
         snapshot,
         currentKey,
-        props.sessionId as string,
+        props.sessionId,
         address.turn,
         presentation.semantic,
-      )) as ToolActivityGroupInfo | undefined
-    : undefined
+      )
+    : undefined) as ToolActivityGroupInfo | undefined
   return (
     <FollowNodeView
       Inner={Inner}
@@ -713,39 +682,6 @@ function TailAwareToolFollowNodeView({
   )
 }
 
-function InferredTurnFollowNodeView({
-  Inner,
-  motion,
-  props,
-  nodeKey: currentKey,
-  sessionId,
-  useSession,
-}: {
-  readonly Inner: ComponentType<FollowWrapProps>
-  readonly motion: FollowMotionConfig
-  readonly props: FollowWrapProps
-  readonly nodeKey: string
-  readonly sessionId: string
-  readonly useSession: (selector: (snapshot: unknown) => unknown) => unknown
-}) {
-  const turn = useSession(snapshot => followingTurn(snapshot, currentKey)) as TurnDetails | undefined
-  const address = turn === undefined ? undefined : { sessionId, turn: turn.turn }
-  const kind = chatNodeKind(props.node)
-  const group = useSession(snapshot => kind === 'context' && turn !== undefined
-    ? nativeActivityGroup(snapshot, currentKey, sessionId, turn.turn, kind)
-    : undefined) as ToolActivityGroupInfo | undefined
-  return (
-    <FollowNodeView
-      Inner={Inner}
-      motion={motion}
-      props={props}
-      address={address}
-      toolGroup={group}
-      turnStartTime={turn?.startTime}
-    />
-  )
-}
-
 function FollowNodeView({
   Inner,
   motion,
@@ -753,21 +689,32 @@ function FollowNodeView({
   address,
   awaitingNext = false,
   toolGroup,
-  turnStartTime = turnDetailsFromNode(props.node)?.startTime,
 }: {
   readonly Inner: ComponentType<FollowWrapProps>
   readonly motion: FollowMotionConfig
   readonly props: FollowWrapProps
-  readonly address: TurnFoldAddress | undefined
+  readonly address: TurnAddress | undefined
   readonly awaitingNext?: boolean | undefined
   readonly toolGroup?: ToolActivityGroupInfo | undefined
-  readonly turnStartTime?: number | undefined
 }) {
   const speedCpsRef = useRef(35)
+  const turnProcess = props.turnProcess as TurnProcessOwnerProps | undefined
+  const compactTranscript = useCompactTranscript()
+  const historyIncomplete = typeof props.useSession === 'function'
+    && (props.useSession as (selector: (snapshot: { hasMore?: boolean }) => boolean) => boolean)(
+      snapshot => snapshot.hasMore === true,
+    )
+  const processStartLoaded = loadedProcessStart(props.node, turnProcess)
+  const fallbackGate = { compactTranscript, historyIncomplete, processStartLoaded }
+  const fallbackHidden = isFallbackProcessMember(props.node, turnProcess, fallbackGate)
+    && turnProcess?.open === false
+  const revealProcess = useCallback(() => { turnProcess?.setOpen(true) }, [turnProcess])
+  const seatRef = useChatSeatHidden(fallbackHidden, revealProcess)
   const [eventElement, setEventElement] = useState<HTMLDivElement | null>(null)
   const eventRef = useCallback((element: HTMLDivElement | null) => {
+    seatRef(element)
     setEventElement(element)
-  }, [])
+  }, [seatRef])
   const growing = isGrowingChatNode(props.node)
   const kind = chatNodeKind(props.node)
   const staticCompaction = kind === 'compaction' || kind === 'manual-compaction'
@@ -803,12 +750,6 @@ function FollowNodeView({
   }, [editStats, eventElement, props.node])
   const ownsStreamSemanticIcon = tool === null && CONVERSATION_NODE_ICONS[kind] !== undefined
   const toolProgressActive = tool !== null && (growing || awaitingNext)
-  const key = nodeKey(props.node)
-  const memberId = address === undefined || key === undefined ? undefined : turnProcessMemberId(address, key)
-  const translate = typeof props.t === 'function' ? props.t as TurnElapsedTranslator : undefined
-  const formatRunningElapsed = translate === undefined
-    ? undefined
-    : (ms: number) => formatTurnProcessed(ms, translate)
   const inner = (
     <>
       {tool !== null && <ToolSemanticIcon presentation={tool} />}
@@ -858,48 +799,22 @@ function FollowNodeView({
       minSpeedPxPerSec={motion.minSpeedPxPerSec}
       maxSpeedPxPerSec={motion.maxSpeedPxPerSec}
     >
-      {memberId !== undefined && address !== undefined && toolGroup !== undefined && activityHeader !== null ? (
+      {address !== undefined && toolGroup !== undefined && activityHeader !== null ? (
         <ToolActivityGroupMember
           group={toolGroup}
-          address={address}
-          memberId={memberId}
-          memberOrder={nodeOrder(props.node)}
-          turnStartTime={turnStartTime}
-          formatRunningElapsed={formatRunningElapsed}
           memberRef={eventRef}
           eventAttributes={eventAttributes}
           header={activityHeader}
         >
           {inner}
         </ToolActivityGroupMember>
-      ) : memberId !== undefined && address !== undefined ? (
-        <TurnProcessMember
-          address={address}
-          memberId={memberId}
-          memberOrder={nodeOrder(props.node)}
-          turnStartTime={turnStartTime}
-          formatRunningElapsed={formatRunningElapsed}
-          memberRef={eventRef}
-          className={css.eventRow}
-          onClickCapture={preventCompactionExpand}
-          data-stream-node={kind}
-          data-stream-turn={address.turn}
-          data-stream-state={growing ? 'running' : 'settled'}
-          data-stream-progress={toolProgressActive ? 'active' : undefined}
-          data-stream-tool-row={tool === null ? undefined : ''}
-          data-stream-native-disclosure={tool === null ? '' : undefined}
-          data-stream-semantic-icon-owned={ownsStreamSemanticIcon ? kind : undefined}
-          data-tool-semantic={tool?.semantic}
-          data-tool-name={tool?.name}
-        >
-          {inner}
-        </TurnProcessMember>
       ) : (
         <div
           ref={eventRef}
           className={css.eventRow}
           onClickCapture={preventCompactionExpand}
           data-stream-node={kind}
+          data-stream-turn={address?.turn}
           data-stream-state={growing ? 'running' : 'settled'}
           data-stream-progress={toolProgressActive ? 'active' : undefined}
           data-stream-tool-row={tool === null ? undefined : ''}

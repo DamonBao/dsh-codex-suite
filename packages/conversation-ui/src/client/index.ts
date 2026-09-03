@@ -11,8 +11,9 @@ import type {} from '@deepseek-ai/dsh-client-ui-settings-plugins/client'
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type {} from '@deepseek-ai/dsh-client-ui-chat/client'
 import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
-import type { ChatNodeViewProps } from '@deepseek-ai/dsh-client-ui-chat/client'
+import type { ChatNodeViewProps, ChatViewSlotProps } from '@deepseek-ai/dsh-client-ui-chat/client'
 import { TypewriterAssistantNodeView } from './TypewriterAssistantNodeView.tsx'
+import { CodexTurnProcessNodeView } from './CodexTurnProcessNodeView.tsx'
 import { wrapFollowNodeView, type FollowWrapProps } from './TypewriterToolNodeView.tsx'
 import { wrapTurnPreludeNodeView } from './TurnPreludeUserNodeView.tsx'
 import { ConversationCard } from './ConversationCard.tsx'
@@ -20,6 +21,7 @@ import { ConversationCardController } from './conversation-ui-card-controller.ts
 import { DeliverablesCard } from './DeliverablesCard.tsx'
 import { deliverablesDefinition, selectDeliverables } from './deliverables.ts'
 import { createConversationSettingsApi } from './conversation-ui-settings-api.ts'
+import { wrapTranscriptView } from './TranscriptViewBridge.tsx'
 import { NS as SETTINGS_NS, en, zh } from './locales.ts'
 import { DEFAULT_CONVERSATION_CONFIG, CONVERSATION_BOOT_GLOBAL, type ConversationConfig } from '../config.ts'
 import { DEFAULT_CONVERSATION_SETTINGS } from '../settings.ts'
@@ -37,8 +39,8 @@ type AssistantProps = ChatNodeViewProps<'assistant-step'>
 const CONVERSATION_MODES: readonly string[] = ['typewriter', 'teleprompter']
 const CONVERSATION_PRESETS: readonly string[] = ['realtime', 'balanced', 'silky']
 
-/** Steering/command rows stay untouched; `assistant-step` is replaced. */
-const SKIP_WRAP = new Set(['assistant-step', 'steering', 'command-input'])
+/** Steering/command rows stay untouched; Assistant and Turn control are replaced. */
+const SKIP_WRAP = new Set(['assistant-step', 'turn-process', 'steering', 'command-input'])
 
 /**
  * Read the Host-bridged boot config. The inline script is produced by this
@@ -116,6 +118,37 @@ function wrapGrowingChatRows(ctx: ClientContext, config: ConversationConfig): ()
   }
 }
 
+/** Bridge DSH's transcript preference through the native Chat view tree. */
+function wrapNativeChatView(ctx: ClientContext): () => void {
+  const restores: Array<() => void> = []
+  const wrapped = new WeakSet<object>()
+  const wrapAll = (): void => {
+    for (const entry of ctx.slots.entries('conversation.view')) {
+      if (entry.options.id !== 'chat') continue
+      const current = entry.component
+      if (
+        (typeof current !== 'function' && (typeof current !== 'object' || current === null))
+        || wrapped.has(current)
+      ) continue
+      const inner = current as ComponentType<ChatViewSlotProps>
+      const next = wrapTranscriptView(inner)
+      wrapped.add(next)
+      entry.component = next
+      restores.push(() => {
+        if (entry.component === next) entry.component = inner
+      })
+    }
+  }
+  wrapAll()
+  const off = ctx.on('slots/changed', (key: string) => {
+    if (key === 'conversation.view') wrapAll()
+  })
+  return () => {
+    off()
+    for (const restore of restores) restore()
+  }
+}
+
 /**
  * A live preference cell read by `useSyncExternalStore`. It starts on the
  * shared default and, once the plugin-owned settings controller is attached,
@@ -163,15 +196,17 @@ class PreferenceCell {
  * Register the Codex-style renderer after the conversation package declares the
  * keyed Chat node seat. A lower priority shadows the built-in assistant row;
  * every other growing row is wrapped in place so Tool cards, retries, and
- * workflow runs share conversation follow. The Host-bridged configuration
- * selects immediate or typewriter reveal, smoothing preset, and glide speed; the
- * plugin-owned settings RPC supplies the live auto-expand preference when the
+ * workflow runs keep their Codex presentation without taking ownership of the
+ * DSH scrollport. The Host-bridged configuration selects immediate or
+ * typewriter reveal and smoothing; the plugin-owned settings RPC supplies the
  * settings surface is composed.
  * @param ctx - Browser context carrying the shared slot registry.
  */
 export function apply(ctx: ClientContext): void {
   const config = readBootConfig()
   const preference = new PreferenceCell()
+
+  ctx.slots.inject('conversation.view', () => wrapNativeChatView(ctx))
 
   // The native deliverables package already publishes successful file paths,
   // so the Codex card must register independently of our optional richer event
@@ -243,4 +278,11 @@ export function apply(ctx: ClientContext): void {
       unwrap()
     }
   })
+  ctx.slots.inject('conversation.chat.node', () => ctx.slots.register({
+    name: 'conversation.chat.node',
+    key: 'turn-process',
+    priority: -100,
+    locale: 'chat',
+    registrant: 'dsh-conversation-ui',
+  }, CodexTurnProcessNodeView))
 }

@@ -1,4 +1,4 @@
-import { memo, useEffect, useMemo, useRef, useState, type ComponentProps, type ReactNode } from 'react'
+import { memo, useCallback, useEffect, useMemo, useRef, useState, type ComponentProps, type ReactNode } from 'react'
 import {
   JsonBlock,
   MarkdownText,
@@ -11,9 +11,15 @@ import { useConversationContent, type ConversationSmoothingPreset } from './useC
 import { useFpsGuard } from './useFpsGuard.ts'
 import { FollowHost } from './FollowHost.tsx'
 import { DEFAULT_CONVERSATION_CONFIG, type ConversationMode } from '../config.ts'
-import { turnProcessMemberId, useTurnProcessFold } from './turnProcessFold.ts'
-import { TurnProcessMember } from './TurnProcessMember.tsx'
-import { formatTurnElapsed, formatTurnProcessed } from './turnElapsed.ts'
+import { DEFAULT_CONVERSATION_SETTINGS } from '../settings.ts'
+import { useSearchableHidden } from './useSearchableHidden.ts'
+import { useChatSeatHidden } from './useChatSeatHidden.ts'
+import {
+  isFallbackProcessMember,
+  loadedProcessStart,
+  ownsFallbackProcessControl,
+} from './turnProcessFallback.ts'
+import { useCompactTranscript } from './TranscriptViewBridge.tsx'
 import css from './TypewriterAssistantNodeView.module.css'
 
 type AssistantProps = ChatNodeViewProps<'assistant-step'>
@@ -36,7 +42,7 @@ function usePrefersReducedMotion(): boolean {
 interface AnimatedMarkdownTextProps extends MarkdownProps {
   streaming: boolean
   announce: boolean
-  /** True on the last text block: that block owns conversation follow. */
+  /** True while this final text arm is still draining its reveal queue. */
   ownFollow: boolean
   mode: ConversationMode
   preset: ConversationSmoothingPreset
@@ -52,9 +58,9 @@ interface AnimatedMarkdownTextProps extends MarkdownProps {
  * and rendered by the Harness `MarkdownText`
  * streaming arm (incremental parse, frozen non-tail blocks), so there is no
  * raw-text tail and no text-to-markdown swap: the tree stays markdown
- * throughout. The last text block owns conversation-port follow so wraps
- * glide instead of snapping. Once the stream closes and the reveal queue
- * drains, the settled full parse (KaTeX math, fence highlighting, file
+ * throughout. DSH ChatView remains the sole owner of viewport follow while
+ * this component only smooths content reveal. Once the stream closes and the
+ * reveal queue drains, the settled full parse (KaTeX math, fence highlighting, file
  * mentions) swaps in exactly once.
  */
 function AnimatedMarkdownText({
@@ -164,6 +170,32 @@ function AnimatedReasoning({
   )
 }
 
+function ProcessReasoning({
+  hidden,
+  reveal,
+  autoExpand,
+  t,
+  children,
+}: {
+  readonly hidden: boolean
+  readonly reveal: () => void
+  readonly autoExpand: boolean
+  readonly t: AssistantProps['t']
+  readonly children: ReactNode
+}) {
+  const ref = useSearchableHidden(hidden, reveal)
+  return (
+    <div ref={ref} data-turn-process-inline={hidden || undefined}>
+      {autoExpand ? children : (
+        <details className={css.reasoningDisclosure}>
+          <summary className={css.reasoningSummary}>{t('message.turnProcess.thoughtForAWhile')}</summary>
+          {children}
+        </details>
+      )}
+    </div>
+  )
+}
+
 /**
  * Assistant renderer for the Codex-style event stream. Teleprompter mode
  * publishes each latest model snapshot immediately; typewriter mode reveals
@@ -179,9 +211,11 @@ export const TypewriterAssistantNodeView = memo(function TypewriterAssistantNode
   revealCharsPerSec = DEFAULT_CONVERSATION_CONFIG.revealCharsPerSec,
   scrollSpeedPxPerSec = DEFAULT_CONVERSATION_CONFIG.scrollSpeedPxPerSec,
   maxScrollSpeedPxPerSec = DEFAULT_CONVERSATION_CONFIG.maxScrollSpeedPxPerSec,
+  thinkAutoExpand = DEFAULT_CONVERSATION_SETTINGS.thinkAutoExpand,
   node,
-  sessionId,
+  turnProcess,
   useTurnData,
+  useSession,
   openFile,
   renderMessageImages,
   fileMentions,
@@ -202,6 +236,10 @@ export const TypewriterAssistantNodeView = memo(function TypewriterAssistantNode
   const turn = node.location.kind === 'turn' || node.location.kind === 'step'
     ? node.location.turn
     : undefined
+  const compactTranscript = useCompactTranscript()
+  const historyIncomplete = useSession(snapshot => snapshot.hasMore)
+  const processStartLoaded = loadedProcessStart(node, turnProcess)
+  const fallbackGate = { compactTranscript, historyIncomplete, processStartLoaded }
   const tail = useTurnData('turn-tail')
   const finalAnswer = data.status === 'settled'
     && data.finalNode !== undefined
@@ -225,28 +263,20 @@ export const TypewriterAssistantNodeView = memo(function TypewriterAssistantNode
   const hasVisible = streaming
     || data.status === 'interrupted'
     || data.blocks.some(block => block.kind !== 'tool-call')
-  const address = turn === undefined ? undefined : { sessionId, turn: turn.turn }
-  const processMemberId = (phase === 'streaming' || phase === 'process') && address !== undefined && hasVisible
-    ? turnProcessMemberId(address, node.key)
-    : undefined
-  const successfulFinal = finalAnswer
-    && turn?.status === 'closed'
-    && turn.start !== undefined
-    && turn.end !== undefined
-    && turn.end.data.reason.kind === 'completed'
-  const completedLabel = successfulFinal && turn?.start !== undefined && turn.end !== undefined
-    ? formatTurnElapsed(turn.end.time - turn.start.time, t)
-    : undefined
-  const fold = useTurnProcessFold(address, {
-    completedLabel,
-  })
-  const memberOrder = typeof node.anchorSeq === 'number'
-    ? node.anchorSeq
-    : data.finalNode?.seq ?? 0
-  const formatRunningElapsed = useMemo(
-    () => (ms: number) => formatTurnProcessed(ms, t),
-    [t],
-  )
+  const fallbackControl = ownsFallbackProcessControl(node, turnProcess, fallbackGate)
+  const fallbackMember = isFallbackProcessMember(node, turnProcess, fallbackGate)
+  const processCollapsible = turnProcess?.foldable === true || fallbackControl
+  const reasoningHidden = processCollapsible
+    && turnProcess?.spec.answerStep === data.step
+    && turnProcess.spec.inlineReasoning
+    && !turnProcess.open
+  const fallbackHidden = fallbackMember && turnProcess?.open === false
+  const revealProcess = useCallback(() => { turnProcess?.setOpen(true) }, [turnProcess])
+  const seatRef = useChatSeatHidden(fallbackHidden, revealProcess)
+  const rootRef = useCallback((element: HTMLElement | null) => {
+    guardRef(element)
+    seatRef(element)
+  }, [guardRef, seatRef])
   if (!hasVisible) return null
 
   const rendered: ReactNode[] = []
@@ -280,10 +310,15 @@ export const TypewriterAssistantNodeView = memo(function TypewriterAssistantNode
         )
         break
       case 'reasoning':
-        {
-          const reasoning = (
+        rendered.push(
+          <ProcessReasoning
+            key={index}
+            hidden={reasoningHidden}
+            reveal={revealProcess}
+            autoExpand={thinkAutoExpand || !streaming}
+            t={t}
+          >
             <AnimatedReasoning
-              key={index}
               text={block.text}
               labels={labels}
               running={streaming && index === last}
@@ -292,29 +327,8 @@ export const TypewriterAssistantNodeView = memo(function TypewriterAssistantNode
               revealCharsPerSec={revealCharsPerSec}
               shouldHoldBack={shouldHoldBack}
             />
-          )
-          // A closing assistant node is intentionally kept visible so its
-          // final answer cannot disappear with the completed Turn fold. Its
-          // private reasoning is still process content, however, and must be
-          // registered as a fold member rather than left in the final prose.
-          if (finalAnswer && address !== undefined) {
-            rendered.push(
-              <TurnProcessMember
-                key={index}
-                address={address}
-                memberId={turnProcessMemberId(address, `${node.key}:reasoning:${index}`)}
-                // Keep final-node reasoning after any earlier process member;
-                // otherwise equal synthetic seqs could move the disclosure
-                // button into the final-answer row.
-                memberOrder={memberOrder + 0.5 + index}
-              >
-                {reasoning}
-              </TurnProcessMember>,
-            )
-          } else {
-            rendered.push(reasoning)
-          }
-        }
+          </ProcessReasoning>,
+        )
         break
       case 'image': {
         const start = index
@@ -345,13 +359,14 @@ export const TypewriterAssistantNodeView = memo(function TypewriterAssistantNode
     }
   }
 
-  const content = (
-    <>
-      {successfulFinal && fold.controls === '' && completedLabel !== undefined && (
-        <div className={css.turnFoldRow} data-turn-fold-row="">
-          <span className={css.turnFoldLabel}>{completedLabel}</span>
-        </div>
-      )}
+  return (
+    <div
+      ref={rootRef}
+      className={css.root}
+      data-stream-node="assistant-step"
+      data-stream-phase={phase}
+      data-streaming={streaming || undefined}
+    >
       <FollowHost
         active={streaming && !reducedMotion}
         speedCpsRef={rootSpeedRef}
@@ -363,37 +378,6 @@ export const TypewriterAssistantNodeView = memo(function TypewriterAssistantNode
           {data.status === 'interrupted' && <span className={css.stopped}>{t('message.stopped')}</span>}
         </div>
       </FollowHost>
-    </>
-  )
-
-  if (processMemberId !== undefined && address !== undefined) {
-    return (
-      <TurnProcessMember
-        address={address}
-        memberId={processMemberId}
-        memberOrder={memberOrder}
-        turnStartTime={turn?.start?.time}
-        formatRunningElapsed={formatRunningElapsed}
-        memberRef={guardRef}
-        className={css.root}
-        data-stream-node="assistant-step"
-        data-stream-phase={phase}
-        data-streaming={streaming || undefined}
-      >
-        {content}
-      </TurnProcessMember>
-    )
-  }
-
-  return (
-    <div
-      ref={guardRef}
-      className={css.root}
-      data-stream-node="assistant-step"
-      data-stream-phase={phase}
-      data-streaming={streaming || undefined}
-    >
-      {content}
     </div>
   )
 })

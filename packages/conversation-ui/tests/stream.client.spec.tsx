@@ -6,13 +6,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createElement, memo, useState, type FunctionComponent } from 'react'
 import { readFileSync } from 'node:fs'
 import { TypewriterAssistantNodeView } from '../src/client/TypewriterAssistantNodeView.tsx'
-import { FollowHost } from '../src/client/FollowHost.tsx'
-import {
-  computeFollowStep,
-  FOLLOW_LERP_DT_MS,
-  FOLLOW_LERP_MAX,
-  FOLLOW_SPEED_REF_CPS,
-} from '../src/client/teleprompterGlide.ts'
+import { CodexTurnProcessNodeView } from '../src/client/CodexTurnProcessNodeView.tsx'
+import { CompactTranscriptProvider } from '../src/client/TranscriptViewBridge.tsx'
+import { isFallbackProcessMember, loadedProcessStart } from '../src/client/turnProcessFallback.ts'
 import {
   BACKLOG_CHAR_CEILING,
   BACKLOG_SECOND_CEILING,
@@ -40,7 +36,6 @@ import { Config } from '../src/plugin.ts'
 import css from '../src/client/TypewriterAssistantNodeView.module.css'
 
 const FAKE = ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'requestAnimationFrame', 'cancelAnimationFrame', 'performance', 'Date'] as const
-const FOLLOW_SPEED = { current: 35 }
 
 afterEach(() => {
   cleanup()
@@ -57,12 +52,16 @@ function assistantProps(
     nodeKey = 'assistant-1',
     sessionId = 'session-1',
     turnNumber = 1,
+    paginated = false,
+    processStartLoaded = true,
   }: {
     closing?: boolean
     completed?: boolean
     nodeKey?: string
     sessionId?: string
     turnNumber?: number
+    paginated?: boolean
+    processStartLoaded?: boolean
   } = {},
 ): Parameters<typeof TypewriterAssistantNodeView>[0] {
   const finalNode = status === 'settled'
@@ -71,17 +70,29 @@ function assistantProps(
   const turn = {
     turn: turnNumber,
     status: completed ? 'closed' : 'open',
-    start: { time: 1_000 },
+    start: processStartLoaded ? { seq: 3, time: 1_000 } : undefined,
     end: completed ? { time: 1_112_000, data: { reason: { kind: 'completed' } } } : undefined,
   }
   return {
     node: {
       key: nodeKey,
       kind: 'assistant-step',
+      anchorSeq: 41,
       location: { kind: 'step', turn, step: { step: 1 } },
       data: { status, blocks, turn: turnNumber, step: 1, time: 0, finalNode },
     },
     sessionId,
+    useSession: (selector: (snapshot: { hasMore: boolean }) => unknown) => selector({ hasMore: paginated }),
+    useChat: (selector: (snapshot: unknown) => unknown) => selector({
+      locations: { getTurn: () => ['process-start'] },
+      nodes: { get: () => ({
+        key: 'process-start',
+        kind: 'assistant-step',
+        anchorSeq: processStartLoaded ? 3 : 4,
+        location: { kind: 'step', turn, step: { step: 0 } },
+        data: { step: 0 },
+      }) },
+    }),
     useTurnData: () => closing && finalNode !== undefined ? { closing: { finalNode } } : undefined,
     openFile: () => {},
     fileMentions: () => undefined,
@@ -92,6 +103,44 @@ function assistantProps(
       return key
     },
   } as unknown as Parameters<typeof TypewriterAssistantNodeView>[0]
+}
+
+const PROCESS_SPEC = {
+  turn: 1,
+  controlAnchorSeq: 2,
+  processStartSeq: 3,
+  answerAnchorSeq: 41,
+  answerStep: 1,
+  inlineReasoning: true,
+  messageCount: 1,
+  toolCallCount: 1,
+  subagentCount: 0,
+} as const
+
+function turnProcessProps(turnProcess: {
+  readonly spec: typeof PROCESS_SPEC
+  readonly foldable: boolean
+  readonly open: boolean
+  readonly setOpen: (open: boolean) => void
+}): Parameters<typeof CodexTurnProcessNodeView>[0] {
+  const turn = {
+    turn: 1,
+    status: 'closed',
+    start: { seq: 3, time: 1_000 },
+    end: { time: 1_112_000, data: { reason: { kind: 'completed' } } },
+  }
+  return {
+    node: {
+      key: 'turn-process-1',
+      kind: 'turn-process',
+      anchorSeq: 2,
+      location: { kind: 'turn', turn },
+      data: PROCESS_SPEC,
+    },
+    turnProcess,
+    useSession: (selector: (snapshot: { hasMore: boolean }) => unknown) => selector({ hasMore: true }),
+    t: assistantProps('settled', []).t,
+  } as unknown as Parameters<typeof CodexTurnProcessNodeView>[0]
 }
 
 function SmoothProbe({ text, shouldHoldBack, steadyCps }: { text: string; shouldHoldBack?: () => boolean; steadyCps?: number }) {
@@ -216,154 +265,253 @@ describe('assistant renderer', () => {
     expect(final.container.querySelector('[data-stream-phase="final"]')).not.toBeNull()
   })
 
-  it('shows a live processed-duration rule before the first process stream and turns it into the final fold', async () => {
-    vi.setSystemTime(new Date(77_000))
-    const runningProps = assistantProps('running', [
-      { kind: 'text', text: 'checking the source' },
-    ], { nodeKey: 'live-process' })
-    const view = render(<TypewriterAssistantNodeView {...runningProps} mode="teleprompter" />)
-
-    const runningRow = view.container.querySelector('[data-turn-fold-state="running"]') as HTMLElement | null
-    const runningProcess = view.container.querySelector('[data-stream-phase="streaming"]') as HTMLElement
-    expect(runningRow?.textContent).toContain('已处理 1分16秒')
-    expect(runningRow?.querySelector('button')).toBeNull()
-    expect(runningProcess.hidden).toBe(false)
-    expect((runningRow as Node).compareDocumentPosition(runningProcess) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0)
-    const styleSheet = readFileSync('src/client/TypewriterAssistantNodeView.module.css', 'utf8')
-    expect(styleSheet).toMatch(/\.turnFoldRow\s*{[^}]*flex-direction:\s*column/s)
-    expect(styleSheet).toMatch(/\.turnFoldRow::after\s*{[^}]*width:\s*100%[^}]*flex:\s*none/s)
-    expect(styleSheet).toMatch(/\.turnFoldButton,\s*\n\.turnFoldLabel\s*{[^}]*align-self:\s*flex-start/s)
-
-    await act(() => vi.advanceTimersByTimeAsync(1_000))
-    expect(runningRow?.textContent).toContain('已处理 1分17秒')
-
-    view.rerender(<>
-      <TypewriterAssistantNodeView {...assistantProps('settled', [
-        { kind: 'text', text: 'checking the source' },
-      ], { completed: true, nodeKey: 'live-process' })} />
-      <TypewriterAssistantNodeView {...assistantProps('settled', [
-        { kind: 'text', text: 'the final answer' },
-      ], { closing: true, completed: true, nodeKey: 'live-final' })} />
-    </>)
-
-    const completedToggle = view.getByRole('button', { name: /耗时 18分31秒/ })
-    const completedProcess = view.getByText('checking the source').closest('[data-turn-process]') as HTMLElement
-    expect(completedProcess.hidden).toBe(true)
-    expect(completedToggle.getAttribute('aria-expanded')).toBe('false')
-    expect(view.getByText('the final answer').closest('[data-stream-node]')?.hasAttribute('hidden')).toBe(false)
-  })
-
-  it('puts the Turn disclosure before process rows and folds final-node reasoning', () => {
-    const view = render(<>
-      <TypewriterAssistantNodeView {...assistantProps('settled', [
-        { kind: 'text', text: 'checking the source' },
-      ], { completed: true, nodeKey: 'process-1' })} />
-      <TypewriterAssistantNodeView {...assistantProps('settled', [
-        { kind: 'reasoning', text: 'last private verification' },
-        { kind: 'text', text: 'the final answer' },
-      ], { closing: true, completed: true, nodeKey: 'final-1' })} />
-    </>)
-
-    const process = view.container.querySelector('[data-stream-phase="process"]') as HTMLElement
-    const final = view.container.querySelector('[data-stream-phase="final"]') as HTMLElement
+  it('renders Codex duration while delegating disclosure state to the native owner', () => {
+    function Fixture() {
+      const [open, setOpen] = useState(false)
+      const turnProcess = { spec: PROCESS_SPEC, foldable: true, open, setOpen }
+      return <CodexTurnProcessNodeView {...turnProcessProps(turnProcess)} />
+    }
+    const view = render(<Fixture />)
     const toggle = view.getByRole('button', { name: /耗时 18分31秒/ })
-    expect(process.hidden).toBe(true)
-    expect(final.hidden).toBe(false)
-    const reasoning = view.getAllByText('last private verification')[0] as HTMLElement
-    const finalReasoningProcess = reasoning.closest('[data-turn-process]') as HTMLElement | null
-    expect(finalReasoningProcess).not.toBeNull()
-    expect(finalReasoningProcess?.hidden).toBe(true)
     expect(toggle.getAttribute('aria-expanded')).toBe('false')
-    expect(toggle.getAttribute('aria-controls')).toContain(process.id)
-    expect(toggle.compareDocumentPosition(process) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0)
-    const styleSheet = readFileSync('src/client/TypewriterAssistantNodeView.module.css', 'utf8')
-    expect(styleSheet).toMatch(/\[data-turn-process\]\[hidden\]\s*{[^}]*display:\s*none\s*!important/s)
-    expect(styleSheet).toMatch(
-      /data-chat-anchor-key[^}]*:has\(\[data-turn-process\]\[hidden\]\)[^}]*:not\(:has\(\[data-turn-fold-row\]\)\)[^}]*:not\(:has\(\[data-stream-phase='final'\]\)\)[^{]*{[^}]*display:\s*none\s*!important/s,
-    )
-
     fireEvent.click(toggle)
-    expect(process.hidden).toBe(false)
     expect(toggle.getAttribute('aria-expanded')).toBe('true')
-    expect(finalReasoningProcess?.hidden).toBe(false)
-    expect(view.getAllByText('last private verification').length).toBeGreaterThan(0)
-    expect(view.getByText('the final answer').closest('[data-stream-node]')?.hasAttribute('hidden')).toBe(false)
   })
 
-  it('assigns session-level context to the following Turn and makes it the disclosure boundary', () => {
+  it('uses native turnProcess for final-node reasoning and beforematch recovery', () => {
+    function Fixture() {
+      const [open, setOpen] = useState(false)
+      const turnProcess = { spec: PROCESS_SPEC, foldable: true, open, setOpen }
+      return <>
+        <CodexTurnProcessNodeView {...turnProcessProps(turnProcess)} />
+        <TypewriterAssistantNodeView
+          {...assistantProps('settled', [
+            { kind: 'reasoning', text: 'last private verification' },
+            { kind: 'text', text: 'the final answer' },
+          ], { closing: true, completed: true, nodeKey: 'final-1' })}
+          turnProcess={turnProcess}
+        />
+      </>
+    }
+    const view = render(<Fixture />)
+    const toggle = view.getByRole('button', { name: /耗时 18分31秒/ })
+    const inline = view.container.querySelector('[data-turn-process-inline]') as HTMLElement
+    expect(inline.getAttribute('hidden')).toBe('until-found')
+    expect(view.getByText('the final answer').closest('[data-stream-node]')?.hasAttribute('hidden')).toBe(false)
+
+    fireEvent(inline, new Event('beforematch'))
+    expect(toggle.getAttribute('aria-expanded')).toBe('true')
+    expect(inline.hasAttribute('hidden')).toBe(false)
+
+    const styleSheet = readFileSync('src/client/TypewriterAssistantNodeView.module.css', 'utf8')
+    expect(styleSheet).not.toMatch(/\[data-turn-process\]\[hidden\]/)
+    expect(styleSheet).not.toMatch(/:has\(\[data-turn-process\]\[hidden\]\)/)
+  })
+
+  it('does not assign fold ownership to session-level context rows', () => {
     function ContextFixture() {
       return <span>workspace context</span>
     }
     const WrappedContext = wrapFollowNodeView(ContextFixture)
-    const finalProps = assistantProps('settled', [
-      { kind: 'text', text: 'context final answer' },
-    ], { closing: true, completed: true, nodeKey: 'context-final', sessionId: 'context-session' })
-    const contextNode = {
+    const view = render(<WrappedContext node={{
       key: 'context-1',
       kind: 'context',
-      anchorSeq: 10,
       location: { kind: 'session' },
       data: { seq: 10 },
-    }
-    const finalNode = finalProps.node
-    const snapshot = {
-      chat: {
-        order: [contextNode.key, finalNode.key],
-        nodes: {
-          get: (key: string) => key === contextNode.key ? contextNode : finalNode,
-        },
-      },
-    }
-    const useSession = (selector: (value: typeof snapshot) => unknown) => selector(snapshot)
-    const view = render(<>
-      <WrappedContext
-        sessionId="context-session"
-        useSession={useSession}
-        node={contextNode}
-      />
-      <TypewriterAssistantNodeView {...finalProps} />
-    </>)
-
-    const toggle = view.getByRole('button', { name: /耗时/ })
+    }} />)
     const context = view.getByText('workspace context').closest('[data-stream-node]') as HTMLElement
-    expect(context.hidden).toBe(true)
-    expect(toggle.compareDocumentPosition(context) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0)
-    expect(toggle.getAttribute('aria-controls')).toContain(context.id)
+    expect(context.hasAttribute('data-turn-process')).toBe(false)
+    expect(context.hasAttribute('hidden')).toBe(false)
   })
 
   it('keeps completed failures visible instead of hiding their diagnostic process', () => {
     const props = assistantProps('settled', [
       { kind: 'text', text: 'failure details' },
-    ], { closing: true, completed: true, nodeKey: 'failed-final' })
+    ], { closing: true, completed: true, nodeKey: 'failed-final', paginated: true })
     const failedTurn = {
       ...(props.node.location as unknown as { turn: Record<string, unknown> }).turn,
       end: { time: 6_000, data: { reason: { kind: 'error' } } },
     }
-    const view = render(<TypewriterAssistantNodeView
-      {...props}
-      node={{ ...props.node, location: { kind: 'step', turn: failedTurn, step: { step: 1 } } } as typeof props.node}
-    />)
+    const turnProcess = { spec: PROCESS_SPEC, foldable: false, open: false, setOpen: vi.fn() }
+    const view = render(
+      <CompactTranscriptProvider compact>
+        <TypewriterAssistantNodeView
+          {...props}
+          node={{ ...props.node, location: { kind: 'step', turn: failedTurn, step: { step: 1 } } } as typeof props.node}
+          turnProcess={turnProcess}
+        />
+      </CompactTranscriptProvider>,
+    )
 
     expect(view.container.querySelector('[data-stream-phase="final"]')).not.toBeNull()
     expect(view.queryByRole('button', { name: /耗时/ })).toBeNull()
     expect(view.getByText('failure details').closest('[data-stream-node]')?.hasAttribute('hidden')).toBe(false)
   })
 
-  it('isolates expanded state by session and Turn', () => {
-    const renderTurn = (turnNumber: number, sessionId = 'session-1') => <>
-      <TypewriterAssistantNodeView {...assistantProps('settled', [
-        { kind: 'text', text: `process ${sessionId}-${turnNumber}` },
-      ], { completed: true, nodeKey: `process-${turnNumber}`, sessionId, turnNumber })} />
-      <TypewriterAssistantNodeView {...assistantProps('settled', [
-        { kind: 'text', text: `final ${sessionId}-${turnNumber}` },
-      ], { closing: true, completed: true, nodeKey: `final-${turnNumber}`, sessionId, turnNumber })} />
-    </>
-    const view = render(<>{renderTurn(1)}{renderTurn(2)}</>)
-    const toggles = view.getAllByRole('button', { name: /耗时/ })
+  it('classifies the referenced Turn 2 reasoning row from the real DSH projection', () => {
+    const turn = {
+      turn: 2,
+      status: 'closed',
+      start: { seq: 4699, time: 1788395724165 },
+      end: { time: 1788396111640, data: { reason: { kind: 'completed' } } },
+    }
+    const node = {
+      key: 'assistant-step:2:1',
+      kind: 'assistant-step',
+      anchorSeq: 5582,
+      location: { kind: 'step', turn, step: { step: 1 } },
+      data: { step: 1 },
+    }
+    const turnProcess = {
+      spec: {
+        turn: 2,
+        controlAnchorSeq: 5533,
+        processStartSeq: 4699,
+        answerAnchorSeq: 14679,
+        answerStep: 15,
+        inlineReasoning: false,
+        messageCount: 14,
+        toolCallCount: 14,
+        subagentCount: 0,
+      },
+      foldable: false,
+      open: false,
+      setOpen: vi.fn(),
+    }
+    const gate = { compactTranscript: true, historyIncomplete: true, processStartLoaded: true }
 
-    fireEvent.click(toggles[0] as HTMLElement)
-    expect(view.getByText('process session-1-1').closest('[data-stream-node]')?.hasAttribute('hidden')).toBe(false)
-    expect(view.getByText('process session-1-2').closest('[data-stream-node]')?.hasAttribute('hidden')).toBe(true)
+    expect(loadedProcessStart(node, turnProcess as never)).toBe(true)
+    expect(isFallbackProcessMember(node, turnProcess as never, gate)).toBe(true)
+  })
+
+  it('removes hidden process seats from layout without hiding settled answers', () => {
+    const styleSheet = readFileSync('src/client/TypewriterAssistantNodeView.module.css', 'utf8')
+    expect(styleSheet).toMatch(/\[data-codex-process-hidden\][^}]*\{[^}]*position:\s*absolute\s*!important/s)
+    expect(styleSheet).toMatch(/content-visibility:\s*hidden\s*!important/)
+    expect(styleSheet).toMatch(/\.root\[data-streaming='true'\]\s*\{[^}]*animation:/s)
+    expect(styleSheet.match(/\.root\s*\{[^}]*\}/s)?.[0]).not.toContain('animation:')
+  })
+
+  it('falls back to Codex folding while older DSH history remains paginated', () => {
+    function Fixture() {
+      const [open, setOpen] = useState(false)
+      const turnProcess = { spec: PROCESS_SPEC, foldable: false, open, setOpen }
+      return <CompactTranscriptProvider compact>
+        <div data-chat-anchor-key="process-control" hidden>
+          <CodexTurnProcessNodeView {...turnProcessProps(turnProcess)} />
+        </div>
+        <TypewriterAssistantNodeView
+          {...assistantProps('settled', [
+            { kind: 'reasoning', text: 'paginated transcript reasoning' },
+            { kind: 'text', text: 'paginated transcript answer' },
+          ], { closing: true, completed: true, paginated: true })}
+          turnProcess={turnProcess}
+        />
+      </CompactTranscriptProvider>
+    }
+    const view = render(<Fixture />)
+    const fallback = view.container.querySelector('[data-turn-process-fallback]')
+    const inline = view.container.querySelector('[data-turn-process-inline]') as HTMLElement
+    expect(fallback).not.toBeNull()
+    expect(view.container.querySelector('[data-chat-anchor-key="process-control"]')?.hasAttribute('hidden')).toBe(false)
+    expect(inline.getAttribute('hidden')).toBe('until-found')
+    const toggle = view.getByRole('button', { name: /耗时 18分31秒/ })
+    expect(toggle.getAttribute('aria-expanded')).toBe('false')
+
+    fireEvent.click(toggle)
+    expect(inline.hasAttribute('hidden')).toBe(false)
+    fireEvent.click(toggle)
+    expect(toggle.getAttribute('aria-expanded')).toBe('false')
+    expect(inline.getAttribute('hidden')).toBe('until-found')
+  })
+
+  it('respects Normal transcript mode and incomplete first-Turn windows', () => {
+    const turnProcess = { spec: PROCESS_SPEC, foldable: false, open: false, setOpen: vi.fn() }
+    const normal = render(
+      <CompactTranscriptProvider compact={false}>
+        <TypewriterAssistantNodeView
+          {...assistantProps('settled', [
+            { kind: 'reasoning', text: 'normal transcript reasoning' },
+            { kind: 'text', text: 'normal transcript answer' },
+          ], { closing: true, completed: true, paginated: true })}
+          turnProcess={turnProcess}
+        />
+      </CompactTranscriptProvider>,
+    )
+    expect(normal.container.querySelector('[data-turn-process-fallback]')).toBeNull()
+    expect(normal.container.querySelector('[data-turn-process-inline]')).toBeNull()
+
+    const splitTurn = render(
+      <CompactTranscriptProvider compact>
+        <TypewriterAssistantNodeView
+          {...assistantProps('settled', [
+            { kind: 'reasoning', text: 'loaded suffix only' },
+            { kind: 'text', text: 'partial answer' },
+          ], {
+            closing: true,
+            completed: true,
+            paginated: true,
+            processStartLoaded: false,
+          })}
+          turnProcess={turnProcess}
+        />
+      </CompactTranscriptProvider>,
+    )
+    expect(splitTurn.container.querySelector('[data-turn-process-fallback]')).toBeNull()
+    expect(splitTurn.container.querySelector('[data-turn-process-inline]')).toBeNull()
+  })
+
+  it('uses until-found on fallback process seats and reveals through native state', async () => {
+    function Fixture() {
+      const [open, setOpen] = useState(false)
+      const turnProcess = { spec: PROCESS_SPEC, foldable: false, open, setOpen }
+      const processProps = assistantProps('settled', [
+        { kind: 'reasoning', text: 'earlier process reasoning' },
+      ], { completed: true, nodeKey: 'process-1', paginated: true })
+      const processNode = {
+        ...processProps.node,
+        anchorSeq: 10,
+        data: { ...processProps.node.data, step: 0 },
+        location: {
+          ...processProps.node.location,
+          step: { step: 0 },
+        },
+      } as typeof processProps.node
+      return <CompactTranscriptProvider compact>
+        <div data-chat-anchor-key="process-control" data-chat-turn="1" data-chat-flow-kind="turn-process" hidden>
+          <CodexTurnProcessNodeView {...turnProcessProps(turnProcess)} />
+        </div>
+        <div data-chat-anchor-key="process-1" data-chat-turn="1" data-chat-flow-kind="assistant-step">
+          <TypewriterAssistantNodeView {...processProps} node={processNode} turnProcess={turnProcess} />
+        </div>
+        <div data-chat-anchor-key="final-1" data-chat-turn="1" data-chat-flow-kind="assistant-step">
+          <TypewriterAssistantNodeView
+            {...assistantProps('settled', [{ kind: 'text', text: 'final answer' }], {
+              closing: true,
+              completed: true,
+              nodeKey: 'final-1',
+              paginated: true,
+            })}
+            turnProcess={turnProcess}
+          />
+        </div>
+      </CompactTranscriptProvider>
+    }
+    const view = render(<Fixture />)
+    const processSeat = view.container.querySelector('[data-chat-anchor-key="process-1"]') as HTMLElement
+    expect(processSeat.getAttribute('hidden')).toBe('until-found')
+    expect(processSeat.hasAttribute('data-codex-process-hidden')).toBe(true)
+
+    // Current ChatNodeSeat also runs a parent searchable-hidden effect with a
+    // native false value while history is incomplete. Fallback ownership must
+    // survive that later removal without flashing the process rows open.
+    processSeat.removeAttribute('hidden')
+    await act(async () => { await Promise.resolve() })
+    expect(processSeat.getAttribute('hidden')).toBe('until-found')
+
+    fireEvent(processSeat, new Event('beforematch'))
+    expect(processSeat.hasAttribute('hidden')).toBe(false)
+    expect(view.getByRole('button', { name: /耗时 18分31秒/ }).getAttribute('aria-expanded')).toBe('true')
   })
 
   it('renders streaming text through Markdown without a raw-text tail', () => {
@@ -428,6 +576,24 @@ describe('assistant renderer', () => {
     expect(view.container.querySelectorAll(`.${css.follow}`)).toHaveLength(1)
   })
 
+  it('uses thinkAutoExpand only for streaming reasoning', () => {
+    const block = { kind: 'reasoning', text: 'private streaming thought' }
+    const running = render(<TypewriterAssistantNodeView
+      {...assistantProps('running', [block])}
+      thinkAutoExpand={false}
+    />)
+    const details = running.container.querySelector('details') as HTMLDetailsElement
+    expect(details.open).toBe(false)
+    expect(running.getByText('message.turnProcess.thoughtForAWhile')).not.toBeNull()
+
+    const settled = render(<TypewriterAssistantNodeView
+      {...assistantProps('settled', [block])}
+      thinkAutoExpand={false}
+    />)
+    expect(settled.container.querySelector('details')).toBeNull()
+    expect(settled.container.textContent).toContain('private streaming thought')
+  })
+
   it('keeps reasoning in the ordinary Turn flow after the node settles', () => {
     const block = { kind: 'reasoning', text: 'first line\n\nsecond' }
     const view = render(<TypewriterAssistantNodeView {...assistantProps('settled', [block])} />)
@@ -447,525 +613,27 @@ describe('assistant renderer', () => {
     expect(view.container.querySelectorAll('[aria-live="polite"]')).toHaveLength(1)
   })
 
-  it('does not hand back an unprimed host that deactivates before its first frame', () => {
-    const renderProbe = (active: boolean) => (
-      <div data-conversation-scroll>
-        <div data-chat-flow>
-          <div data-chat-anchor-key="probe">
-            <FollowHost active={active} speedCpsRef={FOLLOW_SPEED}>probe</FollowHost>
-          </div>
-        </div>
-      </div>
-    )
-    const view = render(renderProbe(true))
-    const port = view.container.querySelector('[data-conversation-scroll]') as HTMLElement
-    Object.defineProperty(port, 'clientHeight', { configurable: true, value: 100 })
-    Object.defineProperty(port, 'scrollHeight', { configurable: true, value: 500 })
-    port.scrollTop = 390
-
-    // Keep the host mounted but deactivate it before requestAnimationFrame can
-    // prime animatedH. Cleanup must not subtract the whole scrollHeight.
-    view.rerender(renderProbe(false))
-    expect(port.scrollTop).toBe(390)
-  })
-
-  it('does not let a losing follow driver rewrite the shared port on cleanup', async () => {
-    const renderProbe = (secondActive: boolean) => (
-      <div data-conversation-scroll>
-        <div data-chat-flow>
-          <div data-chat-anchor-key="driver">
-            <FollowHost active speedCpsRef={FOLLOW_SPEED}>driver</FollowHost>
-          </div>
-          <div data-chat-anchor-key="loser">
-            <FollowHost active={secondActive} speedCpsRef={FOLLOW_SPEED}>loser</FollowHost>
-          </div>
-        </div>
-      </div>
-    )
-    const view = render(renderProbe(true))
-    const port = view.container.querySelector('[data-conversation-scroll]') as HTMLElement
-    Object.defineProperty(port, 'clientHeight', { configurable: true, value: 100 })
-    Object.defineProperty(port, 'scrollHeight', { configurable: true, value: 500 })
-    port.scrollTop = 390
-    await act(() => vi.advanceTimersByTimeAsync(80))
-    expect(port.scrollTop).toBe(400)
-
-    // The second host bound this port but lost the token and never primed.
-    // Settling it must leave the initialized driver's visual position intact.
-    view.rerender(renderProbe(false))
-    expect(port.scrollTop).toBe(400)
-  })
-
-  it('ignores ResizeObserver callbacks owned by a losing follow host', async () => {
-    const observers: Array<{ fire: () => void }> = []
-    class ResizeObserverMock {
-      readonly fire: () => void
-      constructor(callback: ResizeObserverCallback) {
-        this.fire = () => callback([], this as unknown as ResizeObserver)
-        observers.push(this)
-      }
-      observe(): void {}
-      unobserve(): void {}
-      disconnect(): void {}
-    }
-    vi.stubGlobal('ResizeObserver', ResizeObserverMock)
-    const view = render(
-      <div data-conversation-scroll>
-        <div data-chat-flow>
-          <div data-chat-anchor-key="driver">
-            <FollowHost active speedCpsRef={FOLLOW_SPEED}>driver</FollowHost>
-          </div>
-          <div data-chat-anchor-key="loser">
-            <FollowHost active speedCpsRef={FOLLOW_SPEED}>loser</FollowHost>
-          </div>
-        </div>
-      </div>,
-    )
-    const port = view.container.querySelector('[data-conversation-scroll]') as HTMLElement
-    Object.defineProperty(port, 'clientHeight', { configurable: true, value: 100 })
-    Object.defineProperty(port, 'scrollHeight', { configurable: true, value: 500 })
-    port.scrollTop = 390
-    await act(() => vi.advanceTimersByTimeAsync(80))
-    expect(observers).toHaveLength(2)
-
-    port.scrollTop = 275
-    observers[1]?.fire()
-    expect(port.scrollTop).toBe(275)
-  })
-
-  it('does not overwrite a reader gesture when the stream closes before the next frame', async () => {
-    const renderProbe = (active: boolean) => (
-      <div data-conversation-scroll>
-        <div data-chat-transcript>
-          <FollowHost active={active} speedCpsRef={FOLLOW_SPEED}>probe</FollowHost>
-        </div>
-      </div>
-    )
-    const view = render(renderProbe(true))
-    const port = view.container.querySelector('[data-conversation-scroll]') as HTMLElement
-    const transcript = view.container.querySelector('[data-chat-transcript]') as HTMLElement
-    Object.defineProperty(port, 'clientHeight', { configurable: true, value: 100 })
-    Object.defineProperty(port, 'scrollHeight', { configurable: true, value: 500 })
-    port.scrollTop = 390
-    await act(() => vi.advanceTimersByTimeAsync(32))
-    expect(port.getAttribute('data-follow-owned')).not.toBeNull()
-
-    fireEvent.wheel(port, { deltaY: -60 })
-    port.scrollTop = 320
-    view.rerender(renderProbe(false))
-
-    expect(port.scrollTop).toBe(320)
-    expect(port.getAttribute('data-follow-owned')).toBeNull()
-    expect(transcript.style.transform).toBe('')
-  })
-
-  it('settles at the floor instead of handing a near-top stale snapshot to a long port', async () => {
-    const observers: Array<{ fire: () => void }> = []
-    class ResizeObserverMock {
-      readonly fire: () => void
-      constructor(callback: ResizeObserverCallback) {
-        this.fire = () => callback([], this as unknown as ResizeObserver)
-        observers.push(this)
-      }
-      observe(): void {}
-      unobserve(): void {}
-      disconnect(): void {}
-    }
-    vi.stubGlobal('ResizeObserver', ResizeObserverMock)
-    const renderProbe = (active: boolean) => (
-      <div data-conversation-scroll>
-        <div data-chat-transcript>
-          <FollowHost active={active} speedCpsRef={FOLLOW_SPEED}>probe</FollowHost>
-        </div>
-      </div>
-    )
-    const view = render(renderProbe(true))
-    const port = view.container.querySelector('[data-conversation-scroll]') as HTMLElement
-    let scrollHeight = 80
-    Object.defineProperty(port, 'clientHeight', { configurable: true, value: 100 })
-    Object.defineProperty(port, 'scrollHeight', { configurable: true, get: () => scrollHeight })
-    port.scrollTop = 0
-    await act(() => vi.advanceTimersByTimeAsync(32))
-    expect(observers).toHaveLength(1)
-
-    // A large layout batch crosses from no scroll room to a long Session while
-    // animatedH still represents the original 80px extent.
-    scrollHeight = 500
-    observers[0]?.fire()
-    expect(port.scrollTop).toBe(400)
-    view.rerender(renderProbe(false))
-
-    expect(port.scrollTop).toBe(400)
-    expect(port.getAttribute('data-follow-owned')).toBeNull()
-  })
-
-  it('hands the driver token to another active host without moving the port upward', async () => {
-    const renderProbe = (firstActive: boolean) => (
-      <div data-conversation-scroll>
-        <div data-chat-transcript>
-          <FollowHost active={firstActive} speedCpsRef={FOLLOW_SPEED}>driver</FollowHost>
-          <FollowHost active speedCpsRef={FOLLOW_SPEED}>successor</FollowHost>
-        </div>
-      </div>
-    )
-    const view = render(renderProbe(true))
-    const port = view.container.querySelector('[data-conversation-scroll]') as HTMLElement
-    const transcript = view.container.querySelector('[data-chat-transcript]') as HTMLElement
-    Object.defineProperty(port, 'clientHeight', { configurable: true, value: 100 })
-    Object.defineProperty(port, 'scrollHeight', { configurable: true, value: 500 })
-    port.scrollTop = 390
-    await act(() => vi.advanceTimersByTimeAsync(80))
-    expect(port.scrollTop).toBe(400)
-    const shift = transcript.style.transform
-    expect(shift).not.toBe('')
-
-    view.rerender(renderProbe(false))
-    expect(port.scrollTop).toBe(400)
-    expect(transcript.style.transform).toBe(shift)
-    await act(() => vi.advanceTimersByTimeAsync(16))
-    expect(port.scrollTop).toBe(400)
-    expect(transcript.style.transform).toBe(shift)
-    expect(port.getAttribute('data-follow-owned')).not.toBeNull()
-  })
-
-  it('preserves the final visual snapshot when all shared hosts stop together', async () => {
-    const renderProbe = (active: boolean) => (
-      <div data-conversation-scroll>
-        <div data-chat-transcript>
-          <FollowHost active={active} speedCpsRef={FOLLOW_SPEED}>driver</FollowHost>
-          <FollowHost active={active} speedCpsRef={FOLLOW_SPEED}>peer</FollowHost>
-        </div>
-      </div>
-    )
-    const view = render(renderProbe(true))
-    const port = view.container.querySelector('[data-conversation-scroll]') as HTMLElement
-    Object.defineProperty(port, 'clientHeight', { configurable: true, value: 100 })
-    Object.defineProperty(port, 'scrollHeight', { configurable: true, value: 500 })
-    port.scrollTop = 390
-    await act(() => vi.advanceTimersByTimeAsync(32))
-    expect(port.scrollTop).toBe(400)
-
-    view.rerender(renderProbe(false))
-    expect(port.scrollTop).toBeGreaterThan(0)
-    expect(port.scrollTop).toBeLessThan(400)
-    expect(port.getAttribute('data-follow-owned')).toBeNull()
-  })
-
-  it('glides the growing conversation port toward the floor while streaming', async () => {
-    const block = { kind: 'text', text: 'line one\n\nline two\n\nline three' }
-    const view = render(
-      <div data-conversation-scroll>
-        <TypewriterAssistantNodeView {...assistantProps('running', [block])} />
-      </div>,
-    )
-    const port = view.container.querySelector('[data-conversation-scroll]') as HTMLElement
-    Object.defineProperty(port, 'clientHeight', { configurable: true, value: 100 })
-    Object.defineProperty(port, 'scrollHeight', { configurable: true, value: 500 })
-    // Start pinned near the floor so the first frame claims follow.
-    port.scrollTop = 390
-    await act(() => vi.advanceTimersByTimeAsync(80))
-    expect(port.getAttribute('data-follow-owned')).not.toBeNull()
-    await act(() => vi.advanceTimersByTimeAsync(800))
-    expect(port.scrollTop).toBeGreaterThan(390)
-  })
-
-  it('releases follow on a reader pull-up and resumes only after a return to the floor', async () => {
-    const block = { kind: 'text', text: 'line one\n\nline two\n\nline three' }
-    const view = render(
-      <div data-conversation-scroll>
-        <TypewriterAssistantNodeView {...assistantProps('running', [block])} />
-      </div>,
-    )
-    const port = view.container.querySelector('[data-conversation-scroll]') as HTMLElement
-    Object.defineProperty(port, 'clientHeight', { configurable: true, value: 100 })
-    Object.defineProperty(port, 'scrollHeight', { configurable: true, value: 500 })
-    port.scrollTop = 390
-    await act(() => vi.advanceTimersByTimeAsync(80))
-    expect(port.getAttribute('data-follow-owned')).not.toBeNull()
-
-    fireEvent.wheel(port, { deltaY: -80 })
-    port.scrollTop = 40
-    fireEvent.scroll(port)
-    await act(() => vi.advanceTimersByTimeAsync(80))
-    expect(port.getAttribute('data-follow-owned')).toBeNull()
-    const held = port.scrollTop
-    await act(() => vi.advanceTimersByTimeAsync(2400))
-    expect(port.scrollTop).toBe(held)
-
-    port.scrollTop = 400
-    fireEvent.scroll(port)
-    await act(() => vi.advanceTimersByTimeAsync(80))
-    expect(port.getAttribute('data-follow-owned')).not.toBeNull()
-    Object.defineProperty(port, 'scrollHeight', { configurable: true, value: 650 })
-    await act(() => vi.advanceTimersByTimeAsync(400))
-    expect(port.scrollTop).toBeGreaterThan(400)
-  })
-
-  it('drops follow after the node settles so a light wheel is not pulled back', async () => {
-    const block = { kind: 'reasoning', text: 'first line\n\nsecond' }
-    const view = render(
-      <div data-conversation-scroll>
-        <TypewriterAssistantNodeView {...assistantProps('running', [block])} />
-      </div>,
-    )
-    const port = view.container.querySelector('[data-conversation-scroll]') as HTMLElement
-    Object.defineProperty(port, 'clientHeight', { configurable: true, value: 100 })
-    Object.defineProperty(port, 'scrollHeight', { configurable: true, value: 500 })
-    port.scrollTop = 390
-    await act(() => vi.advanceTimersByTimeAsync(80))
-    expect(port.getAttribute('data-follow-owned')).not.toBeNull()
-
-    view.rerender(
-      <div data-conversation-scroll>
-        <TypewriterAssistantNodeView {...assistantProps('settled', [block])} />
-      </div>,
-    )
-    const settled = view.container.querySelector('[data-conversation-scroll]') as HTMLElement
-    Object.defineProperty(settled, 'clientHeight', { configurable: true, value: 100 })
-    Object.defineProperty(settled, 'scrollHeight', { configurable: true, value: 500 })
-    await act(() => vi.advanceTimersByTimeAsync(80))
-    expect(settled.getAttribute('data-follow-owned')).toBeNull()
-
-    fireEvent.wheel(settled, { deltaY: -12 })
-    settled.scrollTop = 370
-    fireEvent.scroll(settled)
-    await act(() => vi.advanceTimersByTimeAsync(200))
-    expect(settled.getAttribute('data-follow-owned')).toBeNull()
-    expect(settled.scrollTop).toBe(370)
-  })
-
-  it('unpins on a light upward wheel instead of requiring a 25px engine lag', async () => {
-    const block = { kind: 'text', text: 'line one\n\nline two\n\nline three' }
-    const view = render(
-      <div data-conversation-scroll>
-        <TypewriterAssistantNodeView {...assistantProps('running', [block])} />
-      </div>,
-    )
-    const port = view.container.querySelector('[data-conversation-scroll]') as HTMLElement
-    Object.defineProperty(port, 'clientHeight', { configurable: true, value: 100 })
-    Object.defineProperty(port, 'scrollHeight', { configurable: true, value: 500 })
-    port.scrollTop = 390
-    await act(() => vi.advanceTimersByTimeAsync(80))
-    expect(port.getAttribute('data-follow-owned')).not.toBeNull()
-
-    fireEvent.wheel(port, { deltaY: -12 })
-    port.scrollTop = 385
-    await act(() => vi.advanceTimersByTimeAsync(80))
-    expect(port.getAttribute('data-follow-owned')).toBeNull()
-    expect(port.scrollTop).toBe(385)
-  })
-
-  it('unpins before a pointer-driven disclosure collapse changes layout', async () => {
-    const block = { kind: 'text', text: 'line one\\n\\nline two\\n\\nline three' }
-    const view = render(
-      <div data-conversation-scroll>
-        <TypewriterAssistantNodeView {...assistantProps('running', [block])} />
-      </div>,
-    )
-    const port = view.container.querySelector('[data-conversation-scroll]') as HTMLElement
-    Object.defineProperty(port, 'clientHeight', { configurable: true, value: 100 })
-    Object.defineProperty(port, 'scrollHeight', { configurable: true, value: 500 })
-    port.scrollTop = 390
-    await act(() => vi.advanceTimersByTimeAsync(80))
-    expect(port.getAttribute('data-follow-owned')).not.toBeNull()
-
-    fireEvent.pointerDown(port)
-    await act(() => vi.advanceTimersByTimeAsync(80))
-    expect(port.getAttribute('data-follow-owned')).toBeNull()
-  })
-
-  it('hands the reader the lag-compensated position on unpin, not the engine floor', async () => {
-    const block = { kind: 'text', text: 'line one\n\nline two\n\nline three' }
-    const view = render(
-      <div data-conversation-scroll>
-        <div data-chat-transcript>
-          <TypewriterAssistantNodeView {...assistantProps('running', [block])} />
-        </div>
-      </div>,
-    )
-    const port = view.container.querySelector('[data-conversation-scroll]') as HTMLElement
-    const transcript = view.container.querySelector('[data-chat-transcript]') as HTMLElement
-    Object.defineProperty(port, 'clientHeight', { configurable: true, value: 100 })
-    Object.defineProperty(port, 'scrollHeight', { configurable: true, value: 500 })
-    port.scrollTop = 390
-    await act(() => vi.advanceTimersByTimeAsync(80))
-    expect(port.getAttribute('data-follow-owned')).not.toBeNull()
-    // Engine pinned at the floor; the glide lag rides on the transcript.
-    expect(port.scrollTop).toBe(400)
-    const lagBefore = Number(/translate3d\(0, ([\d.]+)px, 0\)/.exec(transcript.style.transform)?.[1] ?? -1)
-    expect(lagBefore).toBeGreaterThan(0)
-
-    // Reader pulls the engine up beyond the slack band; the effective visual
-    // top is engine - lag.
-    fireEvent.wheel(port, { deltaY: -60 })
-    port.scrollTop = 340
-    await act(() => vi.advanceTimersByTimeAsync(80))
-    expect(port.getAttribute('data-follow-owned')).toBeNull()
-    expect(transcript.style.transform).toBe('')
-    // Continuity: after the transform clears, scrollTop IS the visual top the
-    // reader was seeing (engine - lag), not the pre-unpin engine position.
-    expect(port.scrollTop).toBeCloseTo(340 - lagBefore, 1)
-    const held = port.scrollTop
-    await act(() => vi.advanceTimersByTimeAsync(2400))
-    expect(port.scrollTop).toBe(held)
-  })
-
-  it('settles on the lag-compensated position when the stream closes instead of snapping to the floor', async () => {
-    const block = { kind: 'text', text: 'line one\n\nline two\n\nline three' }
-    const view = render(
-      <div data-conversation-scroll>
-        <div data-chat-transcript>
-          <TypewriterAssistantNodeView {...assistantProps('running', [block])} />
-        </div>
-      </div>,
-    )
-    const port = view.container.querySelector('[data-conversation-scroll]') as HTMLElement
-    Object.defineProperty(port, 'clientHeight', { configurable: true, value: 100 })
-    Object.defineProperty(port, 'scrollHeight', { configurable: true, value: 500 })
-    port.scrollTop = 390
-    await act(() => vi.advanceTimersByTimeAsync(80))
-    expect(port.scrollTop).toBe(400)
-
-    // Close while the glide still trails: the ownership handover must land on
-    // the visual top (below the floor), never snap scrollTop to the floor.
-    view.rerender(
-      <div data-conversation-scroll>
-        <div data-chat-transcript>
-          <TypewriterAssistantNodeView {...assistantProps('settled', [block])} />
-        </div>
-      </div>,
-    )
-    await act(() => vi.advanceTimersByTimeAsync(48))
-    expect(port.scrollTop).toBeLessThan(400)
-    expect(port.scrollTop).toBeGreaterThan(0)
-  })
-
-  it('shifts message rows, not the turn-status sibling, when the host has no transcript box', async () => {
-    const block = { kind: 'text', text: 'line one\n\nline two\n\nline three' }
-    const view = render(
-      <div data-conversation-scroll>
-        <div data-chat-flow>
-          <div data-chat-anchor-key="a">
-            <TypewriterAssistantNodeView {...assistantProps('running', [block])} />
-          </div>
-          <div data-chat-anchor-key="b"><span>older</span></div>
-          <div role="status">Deep diving...</div>
-        </div>
-      </div>,
-    )
-    const port = view.container.querySelector('[data-conversation-scroll]') as HTMLElement
-    const flow = view.container.querySelector('[data-chat-flow]') as HTMLElement
-    const label = view.container.querySelector('[role="status"]') as HTMLElement
-    Object.defineProperty(port, 'clientHeight', { configurable: true, value: 100 })
-    Object.defineProperty(port, 'scrollHeight', { configurable: true, value: 500 })
-    port.scrollTop = 390
-    await act(() => vi.advanceTimersByTimeAsync(80))
-    expect(port.getAttribute('data-follow-owned')).not.toBeNull()
-    // Engine pinned at the floor; the lag rides the message rows only.
-    expect(port.scrollTop).toBe(400)
-    expect(flow.style.transform).toBe('')
-    expect(label.style.transform).toBe('')
-    const rows = flow.querySelectorAll('[data-chat-anchor-key]')
-    expect(rows.length).toBe(2)
-    for (const row of rows) {
-      expect((row as HTMLElement).style.transform).toMatch(/^translate3d\(0(px)?, \d/)
-    }
-  })
-
-  it('shifts only the outermost rows so nested tool subcalls do not double-shift', async () => {
-    const block = { kind: 'text', text: 'line one\n\nline two\n\nline three' }
-    const view = render(
-      <div data-conversation-scroll>
-        <div data-chat-flow>
-          <div data-chat-anchor-key="a">
-            <TypewriterAssistantNodeView {...assistantProps('running', [block])} />
-            <div data-chat-anchor-key="a:sub">
-              <span>subcall</span>
-            </div>
-          </div>
-          <div data-chat-anchor-key="b"><span>older</span></div>
-          <div role="status">Deep diving...</div>
-        </div>
-      </div>,
-    )
-    const port = view.container.querySelector('[data-conversation-scroll]') as HTMLElement
-    const flow = view.container.querySelector('[data-chat-flow]') as HTMLElement
-    const outer = flow.querySelector('[data-chat-anchor-key="a"]') as HTMLElement
-    const sub = flow.querySelector('[data-chat-anchor-key="a:sub"]') as HTMLElement
-    const sibling = flow.querySelector('[data-chat-anchor-key="b"]') as HTMLElement
-    const label = view.container.querySelector('[role="status"]') as HTMLElement
-    Object.defineProperty(port, 'clientHeight', { configurable: true, value: 100 })
-    Object.defineProperty(port, 'scrollHeight', { configurable: true, value: 500 })
-    port.scrollTop = 390
-    await act(() => vi.advanceTimersByTimeAsync(80))
-    expect(port.getAttribute('data-follow-owned')).not.toBeNull()
-    // The lag rides the outermost rows only; a nested subcall row is not
-    // shifted on its own (it would tear away from its parent by the lag).
-    expect(outer.style.transform).toMatch(/^translate3d\(0(px)?, \d/)
-    expect(sibling.style.transform).toMatch(/^translate3d\(0(px)?, \d/)
-    expect(sub.style.transform).toBe('')
-    expect(flow.style.transform).toBe('')
-    expect(label.style.transform).toBe('')
-  })
-
-  it('keeps following when the column grows without a reader gesture', async () => {
-    const block = { kind: 'text', text: 'line one\n\nline two\n\nline three' }
-    const view = render(
-      <div data-conversation-scroll>
-        <TypewriterAssistantNodeView {...assistantProps('running', [block])} />
-      </div>,
-    )
-    const port = view.container.querySelector('[data-conversation-scroll]') as HTMLElement
-    Object.defineProperty(port, 'clientHeight', { configurable: true, value: 100 })
-    Object.defineProperty(port, 'scrollHeight', { configurable: true, value: 500 })
-    port.scrollTop = 390
-    await act(() => vi.advanceTimersByTimeAsync(80))
-    expect(port.getAttribute('data-follow-owned')).not.toBeNull()
-    Object.defineProperty(port, 'scrollHeight', { configurable: true, value: 720 })
-    await act(() => vi.advanceTimersByTimeAsync(400))
-    expect(port.getAttribute('data-follow-owned')).not.toBeNull()
-    expect(port.scrollTop).toBeGreaterThan(390)
-  })
-
-  it('glides the turn-status chrome down before the port has scroll room', async () => {
+  it('leaves DSH session scroll restoration and follow state untouched', async () => {
     const block = { kind: 'text', text: 'line one\n\nline two' }
     const view = render(
       <div data-conversation-scroll>
         <div data-chat-flow>
-          <div data-chat-transcript>
+          <div data-chat-anchor-key="running">
             <TypewriterAssistantNodeView {...assistantProps('running', [block])} />
           </div>
-          <div data-chat-turn-status="" role="status">Deep diving...</div>
         </div>
       </div>,
     )
     const port = view.container.querySelector('[data-conversation-scroll]') as HTMLElement
-    const transcript = view.container.querySelector('[data-chat-transcript]') as HTMLElement
-    const chrome = view.container.querySelector('[data-chat-turn-status]') as HTMLElement
-    // Content shorter than the viewport: the port cannot scroll, so the
-    // content-height lag has no scrollTop room to ride.
+    const flow = view.container.querySelector('[data-chat-flow]') as HTMLElement
     Object.defineProperty(port, 'clientHeight', { configurable: true, value: 100 })
-    Object.defineProperty(port, 'scrollHeight', { configurable: true, value: 20 })
-    port.scrollTop = 0
-    await act(() => vi.advanceTimersByTimeAsync(80))
-    expect(port.getAttribute('data-follow-owned')).not.toBeNull()
+    Object.defineProperty(port, 'scrollHeight', { configurable: true, value: 500 })
+    port.scrollTop = 275
 
-    // A wrap grows the content while it is still short of the viewport. The
-    // interpolated lag descends the turn-status label instead of snapping it.
-    Object.defineProperty(port, 'scrollHeight', { configurable: true, value: 60 })
-    await act(() => vi.advanceTimersByTimeAsync(80))
-    expect(port.scrollTop).toBe(0)
-    expect(transcript.style.transform).toBe('')
-    const chromeShift = Number(/translate3d\(0, ([\d.-]+)px, 0\)/.exec(chrome.style.transform)?.[1] ?? 0)
-    // The label is descending (negative), but by less than the full 40px
-    // content-height jump — it is gliding, not snapping.
-    expect(chromeShift).toBeLessThan(0)
-    expect(chromeShift).toBeGreaterThan(-40)
-
-    // The lag keeps closing toward the settled position.
-    await act(() => vi.advanceTimersByTimeAsync(400))
-    const laterShift = Number(/translate3d\(0, ([\d.-]+)px, 0\)/.exec(chrome.style.transform)?.[1] ?? 0)
-    expect(laterShift).toBeGreaterThan(chromeShift)
+    await act(() => vi.advanceTimersByTimeAsync(1_000))
+    expect(port.scrollTop).toBe(275)
+    expect(port.hasAttribute('data-follow-owned')).toBe(false)
+    expect(flow.style.transform).toBe('')
   })
 
   it('returns settled text to the Harness Markdown renderer', () => {
@@ -1099,8 +767,9 @@ describe('Codex-style deliverables', () => {
 })
 
 describe('client plugin lifecycle', () => {
-  it('shadows the built-in assistant cell and removes its entry on disposal', async () => {
+  it('shadows Assistant and native Turn control without wrapping the native control', async () => {
     expect(inject).toEqual(['slots'])
+    function NativeTurnProcess() { return null }
     const ctx = new Context()
     await ctx.plugin(SlotRegistry).await()
     ctx.slots.register({
@@ -1111,16 +780,47 @@ describe('client plugin lifecycle', () => {
       name: 'conversation.chat.node',
       key: 'tool-call',
     } as never, (() => null) as never)
+    ctx.slots.register({
+      name: 'conversation.chat.node',
+      key: 'turn-process',
+      priority: 0,
+    } as never, NativeTurnProcess as never)
     const fiber = ctx.plugin({ inject: [...inject], apply })
     await fiber.await()
 
-    const keys = ctx.slots.entries('conversation.chat.node').map(entry => entry.options.key)
-    expect(keys).toEqual(expect.arrayContaining(['assistant-step', 'tool-call']))
+    const entries = ctx.slots.entries('conversation.chat.node')
+    expect(entries.map(entry => entry.options.key)).toEqual(expect.arrayContaining([
+      'assistant-step', 'tool-call', 'turn-process',
+    ]))
+    const processEntries = entries.filter(entry => entry.options.key === 'turn-process')
+    expect(processEntries).toHaveLength(2)
+    expect(processEntries.find(entry => entry.options.priority === 0)?.component).toBe(NativeTurnProcess)
+    expect(processEntries.find(entry => entry.options.priority === -100)?.component).toBe(CodexTurnProcessNodeView)
 
     await fiber.dispose()
     const leftover = ctx.slots.entries('conversation.chat.node')
-    expect(leftover).toHaveLength(1)
-    expect(leftover[0]?.options.key).toBe('tool-call')
+    expect(leftover.map(entry => entry.options.key)).toEqual(['tool-call', 'turn-process'])
+    expect(leftover.find(entry => entry.options.key === 'turn-process')?.component).toBe(NativeTurnProcess)
+  })
+
+  it('bridges the native Chat transcript preference and restores its view entry', async () => {
+    function NativeChatView() { return null }
+    const ctx = new Context()
+    await ctx.plugin(SlotRegistry).await()
+    ctx.slots.register({
+      name: 'root',
+      children: { 'conversation.view': { kind: 'list', scope: 'session' } },
+    } as never, (() => null) as never)
+    ctx.slots.register({
+      name: 'conversation.view',
+      id: 'chat',
+    } as never, NativeChatView as never)
+    const fiber = ctx.plugin({ inject: [...inject], apply })
+    await fiber.await()
+
+    expect(ctx.slots.entries('conversation.view')[0]?.component).not.toBe(NativeChatView)
+    await fiber.dispose()
+    expect(ctx.slots.entries('conversation.view')[0]?.component).toBe(NativeChatView)
   })
 
   it('elects the Codex tail card before the built-in deliverables claimant', async () => {
@@ -1397,165 +1097,62 @@ describe('isGrowingChatNode', () => {
 describe('Turn prelude', () => {
   beforeEach(() => vi.useFakeTimers({ toFake: [...FAKE] }))
 
-  it('shows the processed clock, divider, and shimmering waiting state before any process node exists', async () => {
+  it('shows a running-only processed clock before process output exists', async () => {
     vi.setSystemTime(new Date(10_000))
     function UserFixture() {
       return <div>the user question</div>
     }
     const WrappedUser = wrapTurnPreludeNodeView(UserFixture)
+    const turn = { turn: 4, status: 'open', start: { time: 10_000 } }
     const userNode = {
       key: 'user-waiting-1',
       kind: 'user',
-      anchorSeq: 10,
-      location: { kind: 'session' },
-      data: { kind: 'user', seq: 10, time: 10_000, content: [], source: { kind: 'user' } },
+      location: { kind: 'turn', turn },
+      data: { kind: 'user', seq: 10, time: 10_000 },
     }
-    const snapshot = {
-      running: true,
-      chat: {
-        order: [userNode.key],
-        nodes: { get: (key: string) => key === userNode.key ? userNode : undefined },
-        timeline: { turnOrder: [], turns: new Map() },
-      },
-    }
-    const useSession = (selector: (value: typeof snapshot) => unknown) => selector(snapshot)
-    const view = render(<WrappedUser
-      sessionId="prelude-session"
-      node={userNode}
-      useSession={useSession}
-      t={assistantProps('running', []).t}
-    />)
-
+    const view = render(<WrappedUser node={userNode} t={assistantProps('running', []).t} />)
     const row = view.container.querySelector('[data-turn-fold-state="running"]') as HTMLElement
     expect(row.textContent).toContain('已处理 0秒')
-    expect(view.getByText('思考中').getAttribute('data-turn-waiting')).not.toBeNull()
+    expect(view.getByText('思考中')).not.toBeNull()
     expect(view.container.querySelector('[data-turn-process]')).toBeNull()
-    expect((view.getByText('the user question') as Node).compareDocumentPosition(row)
-      & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0)
-
     await act(() => vi.advanceTimersByTimeAsync(1_000))
     expect(row.textContent).toContain('已处理 1秒')
-
-    const styleSheet = readFileSync('src/client/TypewriterAssistantNodeView.module.css', 'utf8')
-    expect(styleSheet).toMatch(/\.turnWaiting\s*{[^}]*background-clip:\s*text/s)
-    expect(styleSheet).toMatch(/\.turnWaiting\s*{[^}]*animation:\s*dsh-turn-waiting-shimmer/s)
   })
 
-  it('replaces the waiting placeholder when the first real process node arrives', () => {
+  it('hides the waiting placeholder after Chat publishes process output and removes the prelude when closed', () => {
     function UserFixture() {
       return <div>the user question</div>
     }
-    function ToolFixture() {
-      return <div>real tool stream</div>
-    }
     const WrappedUser = wrapTurnPreludeNodeView(UserFixture)
-    const WrappedTool = wrapFollowNodeView(ToolFixture)
+    const openTurn = { turn: 4, status: 'open', start: { time: 20_000 } }
+    const closedTurn = { ...openTurn, status: 'closed', end: { time: 23_000 } }
     const userNode = {
       key: 'user-waiting-2',
       kind: 'user',
-      anchorSeq: 20,
-      location: { kind: 'session' },
-      data: { kind: 'user', seq: 20, time: 20_000, content: [], source: { kind: 'user' } },
-    }
-    const turn = {
-      turn: 4,
-      status: 'open',
-      start: { seq: 19, time: 20_000 },
-      end: undefined,
+      location: { kind: 'turn', turn: openTurn },
+      data: { kind: 'user', seq: 20, time: 20_000 },
     }
     const toolNode = {
       key: 'tool-waiting-2',
       kind: 'tool-call',
-      anchorSeq: 22,
-      location: { kind: 'step', turn, step: { step: 1 } },
+      location: { kind: 'step', turn: openTurn, step: { step: 1 } },
       data: { root: { callId: 'call-waiting-2', name: 'read_file' } },
     }
-    const snapshot = {
-      running: true,
-      chat: {
-        order: [userNode.key, toolNode.key],
-        nodes: { get: (key: string) => key === userNode.key ? userNode : toolNode },
-        timeline: { turnOrder: [turn.turn], turns: new Map([[turn.turn, turn]]) },
-      },
+    const chat = {
+      order: [userNode.key, toolNode.key],
+      nodes: { get: (key: string) => key === userNode.key ? userNode : toolNode },
     }
-    const useSession = (selector: (value: typeof snapshot) => unknown) => selector(snapshot)
-    const view = render(<>
-      <WrappedUser
-        sessionId="prelude-session-2"
-        node={userNode}
-        useSession={useSession}
-        t={assistantProps('running', []).t}
-      />
-      <WrappedTool sessionId="prelude-session-2" node={toolNode} />
-    </>)
-
+    const useChat = (selector: (value: typeof chat) => unknown) => selector(chat)
+    const view = render(<WrappedUser node={userNode} useChat={useChat} t={assistantProps('running', []).t} />)
     expect(view.queryByText('思考中')).toBeNull()
-    expect(view.getByText('real tool stream')).not.toBeNull()
-    expect(view.container.querySelectorAll('[data-turn-fold-row]')).toHaveLength(1)
-  })
+    expect(view.container.querySelector('[data-turn-fold-state="running"]')).not.toBeNull()
 
-  it('keeps the user-anchored disclosure above every process row after completion', () => {
-    function UserFixture() {
-      return <div>completed user question</div>
-    }
-    const WrappedUser = wrapTurnPreludeNodeView(UserFixture)
-    const turn = {
-      turn: 8,
-      status: 'closed',
-      start: { seq: 80, time: 1_000 },
-      end: { seq: 99, time: 4_000, data: { reason: { kind: 'completed' } } },
-    }
-    const userNode = {
-      key: 'user-complete-8',
-      kind: 'user',
-      anchorSeq: 82,
-      location: { kind: 'step', turn, step: { step: 1 } },
-      data: { kind: 'user', seq: 82, time: 1_100, content: [], source: { kind: 'user' } },
-    }
-    const snapshot = {
-      running: false,
-      chat: {
-        order: [userNode.key],
-        nodes: { get: (key: string) => key === userNode.key ? userNode : undefined },
-        timeline: { turnOrder: [turn.turn], turns: new Map([[turn.turn, turn]]) },
-      },
-    }
-    const useSession = (selector: (value: typeof snapshot) => unknown) => selector(snapshot)
-    const view = render(<>
-      <WrappedUser
-        sessionId="prelude-session-8"
-        node={userNode}
-        useSession={useSession}
-        t={assistantProps('running', []).t}
-      />
-      <TypewriterAssistantNodeView {...assistantProps('settled', [
-        { kind: 'text', text: 'all process content' },
-      ], {
-        completed: true,
-        nodeKey: 'prelude-process-8',
-        sessionId: 'prelude-session-8',
-        turnNumber: 8,
-      })} />
-      <TypewriterAssistantNodeView {...assistantProps('settled', [
-        { kind: 'text', text: 'visible final content' },
-      ], {
-        closing: true,
-        completed: true,
-        nodeKey: 'prelude-final-8',
-        sessionId: 'prelude-session-8',
-        turnNumber: 8,
-      })} />
-    </>)
-
-    const user = view.getByText('completed user question')
-    const toggle = view.getByRole('button', { name: /耗时/ })
-    const process = view.getByText('all process content').closest('[data-turn-process]') as HTMLElement
-    const final = view.getByText('visible final content').closest('[data-stream-phase="final"]') as HTMLElement
-    expect(view.container.querySelectorAll('[data-turn-fold-row]')).toHaveLength(1)
-    expect(user.compareDocumentPosition(toggle) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0)
-    expect(toggle.compareDocumentPosition(process) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0)
-    expect(process.hidden).toBe(true)
-    expect(final.hidden).toBe(false)
+    view.rerender(<WrappedUser
+      node={{ ...userNode, location: { kind: 'turn', turn: closedTurn } }}
+      useChat={useChat}
+      t={assistantProps('running', []).t}
+    />)
+    expect(view.container.querySelector('[data-turn-prelude]')).toBeNull()
   })
 })
 
@@ -1649,15 +1246,31 @@ describe('Codex-style Tool presentation', () => {
     expect(readGroup).toBeUndefined()
   })
 
-  it('groups contiguous Prompt context rows into one activity block', () => {
+  it('never groups same-semantic tools across different Turns', () => {
+    const turnA = { turn: 12, status: 'closed' }
+    const turnB = { turn: 13, status: 'open' }
+    const first = {
+      key: 'cross-turn-1', kind: 'tool-call', visibility: 'visible',
+      location: { kind: 'step', turn: turnA, step: { step: 1 } },
+      data: { root: { kind: 'tool-result', callId: 'one', name: 'bash' } },
+    }
+    const second = {
+      key: 'cross-turn-2', kind: 'tool-call', visibility: 'visible',
+      location: { kind: 'step', turn: turnB, step: { step: 1 } },
+      data: { root: { callId: 'two', name: 'bash' } },
+    }
+    const nodes = new Map([[first.key, first], [second.key, second]])
+    const chat = { order: [first.key, second.key], nodes: { get: (key: string) => nodes.get(key) } }
+    expect(toolActivityGroup(chat, first.key, 'cross-turn-session', 12, 'terminal')).toBeUndefined()
+    expect(toolActivityGroup(chat, second.key, 'cross-turn-session', 13, 'terminal')).toBeUndefined()
+  })
+
+  it('does not portal session context across native Turn boundaries', () => {
     const first = { key: 'prompt-1', kind: 'context', visibility: 'visible', location: { kind: 'session' }, data: { seq: 1 } }
     const second = { key: 'prompt-2', kind: 'context', visibility: 'visible', location: { kind: 'session' }, data: { seq: 2 } }
     const nodes = new Map([[first.key, first], [second.key, second]])
-    const snapshot = {
-      chat: { order: [first.key, second.key], nodes: { get: (key: string) => nodes.get(key) } },
-    }
-    const group = nativeActivityGroup(snapshot, first.key, 'prompt-session', 4, 'context')
-    expect(group).toMatchObject({ label: '注入了 Prompt', count: 2, position: 'start' })
+    const chat = { order: [first.key, second.key], nodes: { get: (key: string) => nodes.get(key) } }
+    expect(nativeActivityGroup(chat, first.key, 'prompt-session', 4, 'context')).toBeUndefined()
   })
 
   it('renders contiguous command rows inside one shared activity frame', async () => {
@@ -1696,15 +1309,14 @@ describe('Codex-style Tool presentation', () => {
       data: { root: { kind: 'tool-result', callId: 'group-command-2', name: 'bash' } },
     }
     const nodes = new Map([[first.key, first], [second.key, second]])
-    let snapshot = {
-      running: true,
-      chat: { order: [first.key, second.key], nodes: { get: (key: string) => nodes.get(key) } },
-    }
-    const useSession = (selector: (value: typeof snapshot) => unknown) => selector(snapshot)
+    let running = true
+    const chat = { order: [first.key, second.key], nodes: { get: (key: string) => nodes.get(key) } }
+    const useChat = (selector: (value: typeof chat) => unknown) => selector(chat)
+    const useSession = (selector: (value: { running: boolean }) => unknown) => selector({ running })
     const Wrapped = wrapFollowNodeView(ToolFixture)
     const view = render(<>
-      <Wrapped node={first} sessionId="group-session" useSession={useSession} />
-      <Wrapped node={second} sessionId="group-session" useSession={useSession} />
+      <Wrapped node={first} sessionId="group-session" useChat={useChat} useSession={useSession} />
+      <Wrapped node={second} sessionId="group-session" useChat={useChat} useSession={useSession} />
     </>)
     const frame = await waitFor(() => {
       const element = view.container.querySelector('[data-stream-tool-group-frame]')
@@ -1722,13 +1334,16 @@ describe('Codex-style Tool presentation', () => {
       ...first,
       data: { root: Object.assign({}, first.data.root, { kind: 'tool-result' }) },
     })
-    snapshot = { ...snapshot, running: false }
+    running = false
     view.rerender(<>
-      <Wrapped node={first} sessionId="group-session" useSession={useSession} />
-      <Wrapped node={second} sessionId="group-session" useSession={useSession} />
+      <Wrapped node={first} sessionId="group-session" useChat={useChat} useSession={useSession} />
+      <Wrapped node={second} sessionId="group-session" useChat={useChat} useSession={useSession} />
     </>)
     await waitFor(() => expect(toggle.getAttribute('aria-expanded')).toBe('false'))
-    expect(frame.querySelector('[data-tool-group-member][hidden]')).not.toBeNull()
+    const hiddenMember = frame.querySelector('[data-tool-group-member][hidden="until-found"]') as HTMLElement
+    expect(hiddenMember).not.toBeNull()
+    fireEvent(hiddenMember, new Event('beforematch'))
+    expect(toggle.getAttribute('aria-expanded')).toBe('true')
 
     const styleSheet = readFileSync('src/client/TypewriterAssistantNodeView.module.css', 'utf8')
     expect(styleSheet).toMatch(/\.toolGroupHeader\s*{[^}]*position:\s*relative[^}]*padding:\s*2px 8px 2px 22px/s)
@@ -1753,10 +1368,8 @@ describe('Codex-style Tool presentation', () => {
     expect(styleSheet).toMatch(/data-compaction-icon[\s\S]*color:\s*var\(--dsw-alias-label-secondary\) !important/s)
     expect(styleSheet).toMatch(/data-compaction-icon[\s\S]*color:\s*var\(--dsw-alias-label-secondary\) !important[\s\S]*opacity:\s*1 !important/s)
     fireEvent.click(toggle)
-    expect(toggle.getAttribute('aria-expanded')).toBe('true')
-    fireEvent.click(toggle)
     expect(toggle.getAttribute('aria-expanded')).toBe('false')
-    expect(frame.querySelector('[data-tool-group-member][hidden]')).not.toBeNull()
+    expect(frame.querySelector('[data-tool-group-member][hidden="until-found"]')).not.toBeNull()
   })
 
   it('appends edit +/- counts after the native file summary', async () => {
@@ -2005,17 +1618,16 @@ describe('Codex-style Tool presentation', () => {
     let nodes = new Map<string, unknown>([[toolNode.key, toolNode]])
     let order = [toolNode.key]
     let running = true
-    const useSession = (selector: (snapshot: unknown) => unknown) => selector({
-      running,
-      chat: {
-        order,
-        nodes: { get: (key: string) => nodes.get(key) },
-        timeline: { turns: new Map([[9, turn]]) },
-      },
+    const useSession = (selector: (snapshot: unknown) => unknown) => selector({ running })
+    const useChat = (selector: (snapshot: unknown) => unknown) => selector({
+      order,
+      nodes: { get: (key: string) => nodes.get(key) },
+      timeline: { turns: new Map([[9, turn]]) },
     })
     const props = {
       sessionId: 'tool-tail-session',
       node: toolNode,
+      useChat,
       useSession,
     }
     const view = render(<Wrapped {...props} />)
@@ -2039,92 +1651,20 @@ describe('Codex-style Tool presentation', () => {
     expect(styleSheet).toMatch(/data-stream-tool-row[^}]*data-stream-progress='active'[\s\S]*::after\s*{/s)
   })
 
-  it('folds a settled Tool row with the successful final answer from the same Turn', () => {
+  it('does not own settled Tool Turn visibility', () => {
     function ToolFixture() {
       return <span>tool process</span>
     }
     const Wrapped = wrapFollowNodeView(ToolFixture)
-    const turn = {
-      turn: 3,
-      status: 'closed',
-      start: { time: 1_000 },
-      end: { time: 4_000, data: { reason: { kind: 'completed' } } },
-    }
-    const view = render(<>
-      <Wrapped
-        sessionId="tool-session"
-        node={{
-          key: 'tool-3',
-          kind: 'tool-call',
-          location: { kind: 'step', turn, step: { step: 1 } },
-          data: { root: { kind: 'tool-result', callId: 'call-3', name: 'read_file' } },
-        }}
-      />
-      <TypewriterAssistantNodeView {...assistantProps('settled', [
-        { kind: 'text', text: 'tool final answer' },
-      ], {
-        closing: true,
-        completed: true,
-        nodeKey: 'tool-final-3',
-        sessionId: 'tool-session',
-        turnNumber: 3,
-      })} />
-    </>)
-
+    const turn = { turn: 3, status: 'closed', start: { time: 1_000 }, end: { time: 4_000 } }
+    const view = render(<Wrapped node={{
+      key: 'tool-3',
+      kind: 'tool-call',
+      location: { kind: 'step', turn, step: { step: 1 } },
+      data: { root: { kind: 'tool-result', callId: 'call-3', name: 'read_file' } },
+    }} />)
     const tool = view.getByText('tool process').closest('[data-stream-node]') as HTMLElement
-    const toggle = view.getByRole('button', { name: /耗时/ })
-    expect(tool.hidden).toBe(true)
-    expect(toggle.getAttribute('aria-controls')).toContain(tool.id)
-    fireEvent.click(toggle)
-    expect(tool.hidden).toBe(false)
-  })
-})
-
-describe('computeFollowStep', () => {
-  it('eases a wrap-sized lag instead of snapping it', () => {
-    const step = computeFollowStep(16, { lag: 28, speedEma: FOLLOW_SPEED_REF_CPS })
-    expect(step.advancePx).toBeGreaterThan(0.5)
-    expect(step.advancePx).toBeLessThan(28)
-    expect(step.lerpStep).toBeLessThan(FOLLOW_LERP_MAX)
-  })
-
-  it('accelerates when reveal speed or lag is high', () => {
-    const slow = computeFollowStep(16, { lag: 28, speedEma: 20 })
-    const fast = computeFollowStep(16, { lag: 200, speedEma: 120 })
-    expect(fast.advancePx).toBeGreaterThan(slow.advancePx)
-    expect(fast.lerpStep).toBeGreaterThan(slow.lerpStep)
-  })
-
-  it('honours the configured scroll-speed ceiling', () => {
-    const step = computeFollowStep(16, {
-      lag: 1000,
-      speedEma: 240,
-      minSpeedPxPerSec: 48,
-      maxSpeedPxPerSec: 100,
-    })
-    expect(step.advancePx).toBeLessThanOrEqual(1.6)
-  })
-
-  it('settles when lag is already closed', () => {
-    const step = computeFollowStep(16, { lag: 0, speedEma: 80 })
-    expect(step.advancePx).toBe(0)
-    expect(step.lerpStep).toBe(0)
-  })
-
-  it('uses the demo dt term', () => {
-    const step = computeFollowStep(FOLLOW_LERP_DT_MS, { lag: 160, speedEma: FOLLOW_SPEED_REF_CPS })
-    // lag == LAG_REF and speedFactor == 1 → baseLerp saturates at MAX; dt term is 1 - 1/e.
-    expect(step.lerpStep).toBeCloseTo(FOLLOW_LERP_MAX * (1 - Math.exp(-1)), 5)
-  })
-
-  it('closes a line-sized lag over many frames instead of one hop', () => {
-    let lag = 28
-    for (let frame = 0; frame < 10; frame += 1) {
-      const step = computeFollowStep(16, { lag, speedEma: FOLLOW_SPEED_REF_CPS })
-      expect(step.advancePx).toBeLessThan(8)
-      lag -= step.advancePx
-    }
-    expect(lag).toBeGreaterThan(8)
-    expect(lag).toBeLessThan(24)
+    expect(tool.hasAttribute('data-turn-process')).toBe(false)
+    expect(tool.hasAttribute('hidden')).toBe(false)
   })
 })

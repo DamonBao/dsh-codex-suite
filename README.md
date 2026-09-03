@@ -104,8 +104,8 @@ Both plugins are configured through the profile's `cordis.patch.yml` overlay; us
 | `mode` | `teleprompter` \| `typewriter` | `teleprompter` | Reveal style of assistant content. |
 | `preset` | `realtime` \| `balanced` \| `silky` | `balanced` | Smoothing cadence. |
 | `revealCharsPerSec` | 5–200 | `80` | Typewriter reveal rate. |
-| `scrollSpeedPxPerSec` | 1–200 | `48` | Minimum viewport-follow speed. |
-| `maxScrollSpeedPxPerSec` | 1–2000 | `1000` | Follow speed ceiling; prevents teleporting after a large lag. |
+| `scrollSpeedPxPerSec` | 1–200 | `48` | Deprecated compatibility field; DSH owns scrolling. |
+| `maxScrollSpeedPxPerSec` | 1–2000 | `1000` | Deprecated compatibility field; DSH owns scrolling. |
 
 To temporarily disable the Conversation UI without uninstalling it, apply the bundled [`conversation-ui-off.yml`](packages/conversation-ui/conversation-ui-off.yml) overlay:
 
@@ -165,7 +165,7 @@ Tests run on [vitest](https://vitest.dev) — 14 suites covering the OAuth state
 │  │  └─ cordis.patch.yml
 │  ├─ conversation-ui/    # @jcy2387/dsh-conversation-ui
 │  │  ├─ src/             # Host half: config bridge, settings RPC
-│  │  ├─ src/client/      # Web half: stream views, cards, follow engine
+│  │  ├─ src/client/      # Web half: stream views, cards, native-scroll bridge
 │  │  ├─ tests/           # 3 vitest suites
 │  │  └─ cordis.patch.yml
 │  └─ all/                # @jcy2387/dsh-suite (pure bundle, no runtime code)

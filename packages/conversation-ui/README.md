@@ -25,16 +25,15 @@ DeepSeek Harness（DSH）的 Codex 风格对话界面增强插件：把 Web 对�
 
 | 模式 | 行为 |
 | --- | --- |
-| `teleprompter`（默认） | 内容即时快照呈现，整段向上平滑滑动，像提词器一样阅读。 |
+| `teleprompter`（默认） | 直接呈现模型的最新内容快照，不引入额外逐字队列。 |
 | `typewriter` | 按字素（grapheme）渐进揭示，对中文、emoji 等宽字符安全。 |
 
 - 三档平滑预设：`realtime`（更跟手）、`balanced`（默认）、`silky`（更绵密）。预设控制揭示节奏曲线：到达速率的 EMA 平滑、缓冲目标、追速上限和停顿后的收尾排空速度，让长回复不会整段砸出、快流不会卡顿。
 - `typewriter` 模式另有固定揭示速度 `revealCharsPerSec` 可调。
 
-### 智能视口跟随
+### 流式视口协作
 
-- 新内容以限速平滑跟随：最低 `scrollSpeedPxPerSec`、最高 `maxScrollSpeedPxPerSec`（大滞后不瞬移）。
-- 用户向上滚动阅读时**自动释放跟随**，回到底部后恢复。
+- 当前 DSH `ChatView` 独占会话级位置恢复、底部跟随和用户上滑释放；插件不再直接写 `scrollTop` 或行变换，避免切换会话时争抢滚动所有权。
 - 尊重 `prefers-reduced-motion`；帧率退化时暂停离屏内容的 DOM 提交（FPS 守卫），保住可见帧的流畅。
 
 ### 产物卡片
@@ -76,8 +75,8 @@ Profile patch ID：`conversation-ui`。在 profile 的 `cordis.patch.yml` overla
 | `mode` | `teleprompter` \| `typewriter` | `teleprompter` | 助手内容的揭示模式。 |
 | `preset` | `realtime` \| `balanced` \| `silky` | `balanced` | 平滑节奏预设。 |
 | `revealCharsPerSec` | 5–200 | `80` | `typewriter` 模式的固定揭示速度。 |
-| `scrollSpeedPxPerSec` | 1–200 | `48` | 视口跟随的最低速度。 |
-| `maxScrollSpeedPxPerSec` | 1–2000 | `1000` | 视口跟随的速度上限。 |
+| `scrollSpeedPxPerSec` | 1–200 | `48` | 已弃用；仅保留旧 Profile 配置兼容，滚动由 DSH 管理。 |
+| `maxScrollSpeedPxPerSec` | 1–2000 | `1000` | 已弃用；仅保留旧 Profile 配置兼容，滚动由 DSH 管理。 |
 
 Overlay 示例：
 
@@ -106,7 +105,7 @@ Overlay 示例：
 本包由两半组成，通过一条极窄的配置通道协作：
 
 - **Host 半**（`src/`）：Cordis 插件。负责校验配置 schema，并把校验后的配置注入每个服务出的 index HTML（启动配置全局变量 `window.__DSH_CONVERSATION_UI_CONFIG__`）；同时注册用户设置命名空间与一条仅限 loopback 的设置 RPC（读取/写入偏好、查询安装形态、触发 npm 更新）。
-- **Web 半**（`src/client/`）：React 视图。以低优先级注册替换 `assistant-step` 节点视图实现 Codex 风格助手呈现；其余增长的对话行（Tool 卡片、重试、工作流等）原位包装以共享跟随引擎；在 Turn 尾部注册产物卡片；并在设置页挂载插件配置卡片。缺少 locale / connection / 设置服务时仍以默认配置运行流式渲染。
+- **Web 半**（`src/client/`）：React 视图。以低优先级注册替换 `assistant-step` 与 Turn 过程呈现；其余对话行（Tool 卡片、重试、工作流等）原位包装，但滚动完全委托给 DSH `ChatView`；在 Turn 尾部注册产物卡片，并在设置页挂载插件配置卡片。缺少 locale / connection / 设置服务时仍以默认配置运行流式渲染。
 
 ## 开发
 
@@ -116,7 +115,7 @@ pnpm --filter @jcy2387/dsh-conversation-ui test
 pnpm --filter @jcy2387/dsh-conversation-ui build
 ```
 
-测试基于 vitest + Testing Library，覆盖流式揭示 hook、跟随与折叠行为、设置卡片（客户端与 Host 两侧）。工作区级命令见 [Monorepo README](../../README.zh.md)。
+测试基于 vitest + Testing Library，覆盖流式揭示、原生滚动委托、Turn 折叠与设置卡片（客户端与 Host 两侧）。工作区级命令见 [Monorepo README](../../README.zh.md)。
 
 ## 许可证
 

@@ -12,18 +12,15 @@ export type ConversationMode = 'typewriter' | 'teleprompter'
 
 /** Plugin configuration validated by the Host schema and bridged to the browser half. */
 export interface ConversationConfig {
-  /** Render direction: horizontal per-character reveal or uniform upward glide. */
+  /** Render cadence: per-grapheme typewriter or immediate model snapshots. */
   readonly mode: ConversationMode
   /** Smoothing preset for the reveal cadence. */
   readonly preset: ConversationSmoothingPreset
   /** Fixed grapheme reveal rate used by `typewriter` mode. */
   readonly revealCharsPerSec: number
-  /** Minimum visual follow speed while the transcript is pinned. */
+  /** @deprecated Retained for config compatibility; current DSH owns scrolling. */
   readonly scrollSpeedPxPerSec: number
-  /**
-   * Follow velocity ceiling in CSS pixels per second, so a huge first lag
-   * does not teleport. Ordinary wraps stay well below this.
-   */
+  /** @deprecated Retained for config compatibility; current DSH owns scrolling. */
   readonly maxScrollSpeedPxPerSec: number
 }
 

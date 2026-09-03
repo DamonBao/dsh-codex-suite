@@ -2,8 +2,6 @@ import { createPortal } from 'react-dom'
 import {
   useCallback,
   useEffect,
-  useLayoutEffect,
-  useRef,
   useSyncExternalStore,
   type ReactNode,
   type Ref,
@@ -12,11 +10,7 @@ import {
   IconChevronDownOutline14,
   IconChevronRightOutline14,
 } from '@deepseek-ai/dsh-client-ui-primitives'
-import {
-  useTurnProcessFold,
-  type TurnFoldAddress,
-} from './turnProcessFold.ts'
-import { TurnProcessMember } from './TurnProcessMember.tsx'
+import { useSearchableHidden } from './useSearchableHidden.ts'
 import css from './TypewriterAssistantNodeView.module.css'
 
 export type ToolActivityGroupPosition = 'start' | 'middle' | 'end'
@@ -108,7 +102,12 @@ export function toolActivityGroupId(
   return `dsh-tool-group-${hash(`${sessionId}\u0000${turn}\u0000${semantic}\u0000${firstNodeKey}`)}`
 }
 
-function useToolActivityFold(id: string): { collapsed: boolean; toggle: () => void; collapse: () => void } {
+function useToolActivityFold(id: string): {
+  collapsed: boolean
+  toggle: () => void
+  collapse: () => void
+  expand: () => void
+} {
   const subscribe = useCallback((listener: () => void) => subscribeGroup(id, listener), [id])
   const collapsed = useSyncExternalStore(
     subscribe,
@@ -126,7 +125,13 @@ function useToolActivityFold(id: string): { collapsed: boolean; toggle: () => vo
     state.collapsed = true
     notify(state.listeners)
   }, [id])
-  return { collapsed, toggle, collapse }
+  const expand = useCallback(() => {
+    const state = groupState(id)
+    if (!state.collapsed) return
+    state.collapsed = false
+    notify(state.listeners)
+  }, [id])
+  return { collapsed, toggle, collapse, expand }
 }
 
 function useToolActivityMount(id: string): HTMLElement | null {
@@ -136,20 +141,6 @@ function useToolActivityMount(id: string): HTMLElement | null {
     () => groupMount(id).target,
     () => null,
   )
-}
-
-interface ScrollPositionSnapshot {
-  readonly port: HTMLElement
-  readonly top: number
-  readonly bottomGap: number
-}
-
-function restoreScrollPosition(snapshot: ScrollPositionSnapshot): void {
-  const floor = Math.max(0, snapshot.port.scrollHeight - snapshot.port.clientHeight)
-  const target = snapshot.bottomGap <= 25
-    ? floor
-    : Math.min(snapshot.top, floor)
-  snapshot.port.scrollTop = target
 }
 
 function ToolActivityGroupFrame({
@@ -165,33 +156,9 @@ function ToolActivityGroupFrame({
   readonly header: ReactNode
   readonly children: ReactNode
 }) {
-  const frameRef = useRef<HTMLDivElement | null>(null)
-  const pendingScroll = useRef<ScrollPositionSnapshot | null>(null)
   const register = useCallback((element: HTMLDivElement | null) => {
-    frameRef.current = element
     setMount(group.id, element)
   }, [group.id])
-  const toggleWithScroll = useCallback(() => {
-    const port = frameRef.current?.closest<HTMLElement>('[data-conversation-scroll]')
-    if (port !== null && port !== undefined) {
-      const floor = Math.max(0, port.scrollHeight - port.clientHeight)
-      pendingScroll.current = {
-        port,
-        top: port.scrollTop,
-        bottomGap: floor - port.scrollTop,
-      }
-    }
-    toggle()
-  }, [toggle])
-  useLayoutEffect(() => {
-    const snapshot = pendingScroll.current
-    if (snapshot === null) return
-    pendingScroll.current = null
-    restoreScrollPosition(snapshot)
-    if (typeof window === 'undefined') return
-    const frame = window.requestAnimationFrame(() => restoreScrollPosition(snapshot))
-    return () => window.cancelAnimationFrame(frame)
-  }, [collapsed])
   return (
     <div
       ref={register}
@@ -209,7 +176,7 @@ function ToolActivityGroupFrame({
         aria-expanded={!collapsed}
         aria-controls={group.domId}
         data-stream-tool-group-toggle=""
-        onClick={toggleWithScroll}
+        onClick={toggle}
       >
         {header}
         <span className={css.toolGroupHeaderChevron} aria-hidden>
@@ -221,13 +188,27 @@ function ToolActivityGroupFrame({
   )
 }
 
+function SearchableActivityContent({ hidden, reveal, member = false, children }: {
+  readonly hidden: boolean
+  readonly reveal: () => void
+  readonly member?: boolean | undefined
+  readonly children: ReactNode
+}) {
+  const ref = useSearchableHidden(hidden, reveal)
+  return (
+    <div
+      ref={ref}
+      className={css.toolGroupContent}
+      data-tool-group-member={member || undefined}
+      data-tool-group-hidden={hidden || undefined}
+    >
+      {children}
+    </div>
+  )
+}
+
 interface ToolActivityGroupMemberProps {
   readonly group: ToolActivityGroupInfo
-  readonly address: TurnFoldAddress
-  readonly memberId: string
-  readonly memberOrder: number
-  readonly turnStartTime?: number | undefined
-  readonly formatRunningElapsed?: ((ms: number) => string) | undefined
   readonly memberRef?: Ref<HTMLDivElement> | undefined
   readonly eventAttributes?: Readonly<Record<string, string | undefined>>
   readonly header: ReactNode
@@ -236,22 +217,16 @@ interface ToolActivityGroupMemberProps {
 
 /**
  * Mount the first member as a group host and portal subsequent tool members
- * into the same host. The Turn fold remains shared with ordinary process rows,
- * while a contiguous run of commands gets one Codex-style disclosure block.
+ * into the same host. DSH's outer Chat Node seat owns Turn visibility while a
+ * contiguous run of commands keeps its own Codex-style disclosure block.
  */
 export function ToolActivityGroupMember({
   group,
-  address,
-  memberId,
-  memberOrder,
-  turnStartTime,
-  formatRunningElapsed,
   memberRef,
   eventAttributes,
   header,
   children,
 }: ToolActivityGroupMemberProps) {
-  const fold = useTurnProcessFold(address, { memberId, memberOrder })
   const activity = useToolActivityFold(group.id)
   const mount = useToolActivityMount(group.id)
 
@@ -264,45 +239,32 @@ export function ToolActivityGroupMember({
 
   if (group.position === 'start') {
     return (
-      <TurnProcessMember
-        address={address}
-        memberId={memberId}
-        memberOrder={memberOrder}
-        turnStartTime={turnStartTime}
-        formatRunningElapsed={formatRunningElapsed}
-        className={css.toolGroupAnchor}
-        data-stream-tool-group-anchor=""
-      >
+      <div className={css.toolGroupAnchor} data-stream-tool-group-anchor="">
         <ToolActivityGroupFrame
           group={group}
           collapsed={activity.collapsed}
           toggle={activity.toggle}
           header={header}
         >
-          <div
-            {...eventAttributes}
-            ref={memberRef}
-            className={css.eventRow}
-            data-stream-tool-group-member=""
-            data-stream-tool-group-position="start"
-            data-stream-tool-group-collapsed={activity.collapsed || undefined}
-          >
-            {children}
-          </div>
+          <SearchableActivityContent hidden={activity.collapsed} reveal={activity.expand}>
+            <div
+              {...eventAttributes}
+              ref={memberRef}
+              className={css.eventRow}
+              data-stream-tool-group-member=""
+              data-stream-tool-group-position="start"
+              data-stream-tool-group-collapsed={activity.collapsed || undefined}
+            >
+              {children}
+            </div>
+          </SearchableActivityContent>
         </ToolActivityGroupFrame>
-      </TurnProcessMember>
+      </div>
     )
   }
 
-  const hidden = fold.collapsed || activity.collapsed
   const member = (
-    <div
-      id={memberId}
-      data-turn-process=""
-      data-tool-group-member=""
-      data-tool-group-hidden={hidden || undefined}
-      hidden={hidden}
-    >
+    <SearchableActivityContent hidden={activity.collapsed} reveal={activity.expand} member>
       <div
         {...eventAttributes}
         ref={memberRef}
@@ -313,7 +275,7 @@ export function ToolActivityGroupMember({
       >
         {children}
       </div>
-    </div>
+    </SearchableActivityContent>
   )
 
   if (mount === null) return member

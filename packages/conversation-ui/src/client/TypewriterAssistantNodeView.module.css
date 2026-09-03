@@ -5,7 +5,30 @@
   color: var(--dsw-alias-label-primary);
   font-size: 16px;
   line-height: 28px;
+}
+
+/* Historical settled rows can begin below content-visibility:auto boundaries.
+ * Animating every mount leaves their `both` fill stuck at opacity:0 until a
+ * later paint; only a genuinely streaming row needs the entrance motion. */
+.root[data-streaming='true'] {
   animation: dsh-codex-stream-enter 140ms ease-out both;
+}
+
+/* `hidden="until-found"` intentionally keeps a CSS box, which leaves thousands
+ * of pixels of blank transcript for long completed Turns. Keep browser-find's
+ * beforematch semantics, but remove hidden process seats from normal flow. */
+:global([data-chat-anchor-key][hidden='until-found'][data-codex-process-hidden]),
+:global([data-chat-anchor-key][hidden='until-found'][data-turn-process-hidden]) {
+  position: absolute !important;
+  inline-size: 1px !important;
+  block-size: 1px !important;
+  min-inline-size: 0 !important;
+  min-block-size: 0 !important;
+  overflow: hidden !important;
+  clip-path: inset(50%) !important;
+  content-visibility: hidden !important;
+  contain-intrinsic-size: 0 0 !important;
+  pointer-events: none !important;
 }
 
 .body {
@@ -158,30 +181,10 @@
   flex: none;
 }
 
-/* Author-level display rules on Assistant and Tool rows override the browser's
- * built-in `[hidden]` stylesheet. Keep every registered process member truly
- * out of layout while its Turn is collapsed. */
-[data-turn-process][hidden] {
-  display: none !important;
-}
-
-/* ChatView keeps each flat node in its own flow row. Hiding only the inner
- * process member would leave the parent row-gap behind, producing a large
- * blank band. Preserve the boundary row and the mixed final-answer row, but
- * remove every other collapsed process anchor from layout. */
-:global([data-chat-anchor-key]:has([data-turn-process][hidden]):not(:has([data-turn-fold-row])):not(:has([data-stream-phase='final'])):not(:has([data-stream-tool-group-frame]))) {
-  display: none !important;
-}
-
 /* Portaled members live inside the first row's group frame. Remove their empty
- * original Chat anchors so the host row-gap cannot leave phantom bands. */
+ * original Chat anchors so the host row-gap cannot leave phantom bands. Turn
+ * visibility itself is owned by DSH's searchable outer Chat Node seats. */
 :global([data-chat-anchor-key]:has([data-tool-group-proxy])) {
-  display: none !important;
-}
-
-/* A collapsed Turn still removes the group host itself; a collapsed activity
- * group keeps its heading and only removes the command rows below it. */
-:global([data-chat-anchor-key]:has([data-stream-tool-group-anchor][hidden])) {
   display: none !important;
 }
 
@@ -344,8 +347,11 @@
   white-space: nowrap;
 }
 
-.toolGroupFrame > .eventRow[data-stream-tool-group-member],
-.toolGroupFrame > [data-tool-group-member] > .eventRow[data-stream-tool-group-member] {
+.toolGroupContent {
+  min-width: 0;
+}
+
+.toolGroupFrame .eventRow[data-stream-tool-group-member] {
   margin-block: 0;
   padding-inline: 8px 6px;
   border: 0;
@@ -360,31 +366,6 @@
    * expanded card. */
   inset-block-start: 4px;
   transform: none;
-}
-
-.toolGroupFrame[data-stream-tool-group-collapsed]
-  > .eventRow[data-stream-tool-group-member] > :global([data-chat-call-id]),
-.toolGroupFrame[data-stream-tool-group-collapsed]
-  > .eventRow[data-stream-tool-group-member] > * > :global([data-sample='bash']),
-.toolGroupFrame[data-stream-tool-group-collapsed]
-  > [data-tool-group-member] > .eventRow[data-stream-tool-group-member] > :global([data-chat-call-id]),
-.toolGroupFrame[data-stream-tool-group-collapsed]
-  > [data-tool-group-member] > .eventRow[data-stream-tool-group-member] > * > :global([data-sample='bash']) {
-  display: none !important;
-}
-
-.toolGroupFrame[data-stream-tool-group-collapsed]
-  > .eventRow[data-stream-tool-group-member] > .toolSemanticIcon,
-.toolGroupFrame[data-stream-tool-group-collapsed]
-  > [data-tool-group-member] > .eventRow[data-stream-tool-group-member] > .toolSemanticIcon {
-  display: none;
-}
-
-.toolGroupFrame[data-stream-tool-group-collapsed]
-  > .eventRow[data-stream-tool-group-member] > :not(.toolSemanticIcon):not(.streamSemanticIcon),
-.toolGroupFrame[data-stream-tool-group-collapsed]
-  > [data-tool-group-member] > .eventRow[data-stream-tool-group-member] > :not(.toolSemanticIcon):not(.streamSemanticIcon) {
-  display: none !important;
 }
 
 .eventRow :global([data-disclosure-row]) {
@@ -960,6 +941,29 @@
   }
 }
 
+/* `until-found` keeps a zero-height reasoning box in flex layout. Cancel the
+ * one 16px body gap that would otherwise remain before the final answer. */
+.body > [data-turn-process-inline][hidden] {
+  margin-bottom: -16px;
+}
+
+.reasoningDisclosure {
+  margin: 0;
+}
+
+.reasoningSummary {
+  width: fit-content;
+  cursor: pointer;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 14px;
+  line-height: 24px;
+  list-style-position: inside;
+}
+
+.reasoningSummary:hover {
+  color: var(--dsw-alias-label-primary);
+}
+
 .reasoningText {
   min-width: 0;
   color: var(--dsw-alias-label-primary);
@@ -1234,11 +1238,7 @@
   white-space: nowrap;
 }
 
-/*
- * Follow host: ordinary document flow. The last text block owns the
- * conversation scrollport's bottom-follow while the reply reveals
- * (see useConversationFollow).
- */
+/* Structural stream host only; current DSH ChatView exclusively owns scroll. */
 .follow {
   min-width: 0;
 }

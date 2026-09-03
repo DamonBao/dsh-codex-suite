@@ -104,8 +104,8 @@ dsh web
 | `mode` | `teleprompter` \| `typewriter` | `teleprompter` | 助手内容的揭示风格。 |
 | `preset` | `realtime` \| `balanced` \| `silky` | `balanced` | 平滑节奏档位。 |
 | `revealCharsPerSec` | 5–200 | `80` | 打字机揭示速度。 |
-| `scrollSpeedPxPerSec` | 1–200 | `48` | 视口跟随最低速度。 |
-| `maxScrollSpeedPxPerSec` | 1–2000 | `1000` | 跟随速度上限；防止大滞后后瞬移。 |
+| `scrollSpeedPxPerSec` | 1–200 | `48` | 已弃用的兼容字段；滚动由 DSH 管理。 |
+| `maxScrollSpeedPxPerSec` | 1–2000 | `1000` | 已弃用的兼容字段；滚动由 DSH 管理。 |
 
 若想临时禁用 Conversation UI 而不卸载，应用包内自带的 [`conversation-ui-off.yml`](packages/conversation-ui/conversation-ui-off.yml) overlay：
 
@@ -165,7 +165,7 @@ pnpm --dir packages/all pack --dry-run
 │  │  └─ cordis.patch.yml
 │  ├─ conversation-ui/    # @jcy2387/dsh-conversation-ui
 │  │  ├─ src/             # Host 半：配置桥、设置 RPC
-│  │  ├─ src/client/      # Web 半：流式视图、卡片、跟随引擎
+│  │  ├─ src/client/      # Web 半：流式视图、卡片、原生滚动桥接
 │  │  ├─ tests/           # 3 个 vitest 套件
 │  │  └─ cordis.patch.yml
 │  └─ all/                # @jcy2387/dsh-suite（纯组合包，无运行时代码）
