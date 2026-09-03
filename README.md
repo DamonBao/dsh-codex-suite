@@ -172,7 +172,7 @@ git tag "$VERSION"
 git push origin main --tags
 ```
 
-Then create and publish a GitHub Release for that tag. Dependabot checks GitHub Actions dependencies weekly; npm updates are limited to tooling dev-dependencies because the `@deepseek-ai/*` toolchain is deliberately pinned in `pnpm-workspace.yaml`.
+Then create and publish a GitHub Release for that tag. Dependabot checks GitHub Actions dependencies weekly. npm version updates are intentionally not enabled for Dependabot: it regenerates `pnpm-lock.yaml` without the workspace overrides, so its PRs cannot pass `pnpm install --frozen-lockfile` — bump dependencies manually with `pnpm update`.
 
 ### Repository layout
 

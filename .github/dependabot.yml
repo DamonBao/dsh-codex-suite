@@ -1,32 +1,10 @@
 version: 2
 
+# npm version updates are intentionally not enabled: Dependabot regenerates
+# pnpm-lock.yaml without the workspace overrides in pnpm-workspace.yaml, so
+# its PRs cannot pass `pnpm install --frozen-lockfile`. Dependency bumps are
+# handled manually with `pnpm update`.
 updates:
-  # The @deepseek-ai/* toolchain is deliberately pinned in
-  # pnpm-workspace.yaml (overrides + minimumReleaseAgeExclude) for the
-  # 0.1.2-rc.1 peer closure, so it is excluded from automatic bumps.
-  - package-ecosystem: npm
-    directory: /packages/codex-provider
-    schedule:
-      interval: weekly
-    open-pull-requests-limit: 5
-    ignore:
-      - dependency-name: '@deepseek-ai/*'
-      - dependency-name: '@earendil-works/*'
-    groups:
-      development-dependencies:
-        dependency-type: development
-
-  - package-ecosystem: npm
-    directory: /packages/conversation-ui
-    schedule:
-      interval: weekly
-    open-pull-requests-limit: 5
-    ignore:
-      - dependency-name: '@deepseek-ai/*'
-    groups:
-      development-dependencies:
-        dependency-type: development
-
   - package-ecosystem: github-actions
     directory: /
     schedule:

@@ -172,7 +172,7 @@ git tag "$VERSION"
 git push origin main --tags
 ```
 
-随后为该 tag 创建并发布一个 GitHub Release 即可。Dependabot 每周检查 GitHub Actions 依赖；npm 依赖更新仅限工具链 devDependencies（`@deepseek-ai/*` 工具链已在 `pnpm-workspace.yaml` 中刻意锁版本，不参与自动升级）。
+随后为该 tag 创建并发布一个 GitHub Release 即可。Dependabot 每周检查 GitHub Actions 依赖。刻意未启用 Dependabot 的 npm 依赖更新：它重新生成 `pnpm-lock.yaml` 时不带 workspace overrides，PR 无法通过 `pnpm install --frozen-lockfile` —— 依赖升级请用 `pnpm update` 手动处理。
 
 ### 仓库结构
 
