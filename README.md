@@ -159,7 +159,7 @@ Publishing is automated by the **Release** workflow ([`.github/workflows/release
 
 One-time setup: configure [trusted publishing](https://docs.npmjs.com/trusted-publishing) on npmjs.com for `@jcy2387/dsh-codex-provider`, `@jcy2387/dsh-conversation-ui`, and `@jcy2387/dsh-suite`, each authorizing repository `DamonBao/dsh-codex-suite` with workflow `release.yml` (no environment).
 
-Prereleases are published under channel dist-tags derived from the version: `0.1.2-alpha.4` → `alpha`, `0.1.2-rc.1` → `rc`, and a stable `0.2.0` → `latest`. The workflow is idempotent — a package whose version already exists on npm is skipped, so a re-run after a partial failure republishes only what is missing.
+The dist-tag follows the GitHub Release's pre-release flag: a full release (checkbox unchecked) publishes under `latest` — including rc versions — while a pre-release publishes under the channel tag derived from the version (`0.1.2-alpha.4` → `alpha`, `0.1.2-rc.1` → `rc`). The workflow is idempotent — a package whose version already exists on npm is skipped, so a re-run after a partial failure republishes only what is missing.
 
 A typical release:
 

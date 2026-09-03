@@ -51,6 +51,8 @@ jobs:
       - name: Verify release version and resolve dist tag
         id: version
         shell: bash
+        env:
+          RELEASE_PRERELEASE: ${{ github.event.release.prerelease }}
         run: |
           node --input-type=module <<'EOF'
           import { readFile } from 'node:fs/promises'
@@ -71,12 +73,21 @@ jobs:
             throw new Error(`release tag ${process.env.RELEASE_TAG} must match package version ${version}`)
           }
 
-          // Channel dist tags: 0.1.2-alpha.4 -> alpha, 0.1.2-rc.1 -> rc, 0.2.0 -> latest.
-          const prerelease = version.split('+')[0].split('-').slice(1).join('-')
+          // Dist tags follow the GitHub Release's pre-release flag: a full
+          // release (checkbox unchecked) publishes to latest — including rc
+          // versions — while a pre-release publishes to the channel tag
+          // derived from the version (0.1.2-alpha.4 -> alpha, 0.1.2-rc.1 ->
+          // rc, unknown channels and stable versions marked as pre-release
+          // -> next).
           let distTag = 'latest'
-          if (prerelease) {
-            const channel = prerelease.split('.')[0]
-            distTag = /^[a-z][a-z0-9-]*$/i.test(channel) ? channel : 'next'
+          if (process.env.RELEASE_PRERELEASE === 'true') {
+            const prerelease = version.split('+')[0].split('-').slice(1).join('-')
+            if (prerelease) {
+              const channel = prerelease.split('.')[0]
+              distTag = /^[a-z][a-z0-9-]*$/i.test(channel) ? channel : 'next'
+            } else {
+              distTag = 'next'
+            }
           }
 
           appendFileSync(process.env.GITHUB_OUTPUT, `package-version=${version}\n`)

@@ -159,7 +159,7 @@ pnpm --dir packages/all pack --dry-run
 
 一次性配置：在 npmjs.com 上为 `@jcy2387/dsh-codex-provider`、`@jcy2387/dsh-conversation-ui`、`@jcy2387/dsh-suite` 分别配置 [Trusted Publishing](https://docs.npmjs.com/trusted-publishing)，授权仓库 `DamonBao/dsh-codex-suite`、工作流 `release.yml`（environment 留空）。
 
-预发布版本按通道打 dist-tag：`0.1.2-alpha.4` → `alpha`，`0.1.2-rc.1` → `rc`，正式版 `0.2.0` → `latest`。工作流具备幂等性 —— 某个包的版本若已存在于 npm 则跳过，因此部分失败后重跑只会补发缺失的包。
+dist-tag 跟随 GitHub Release 的 pre-release 勾选：正式 Release（不勾 pre-release）一律发 `latest`（包括 rc 版本）；勾了 pre-release 则按版本通道打 tag（`0.1.2-alpha.4` → `alpha`，`0.1.2-rc.1` → `rc`）。工作流具备幂等性 —— 某个包的版本若已存在于 npm 则跳过，因此部分失败后重跑只会补发缺失的包。
 
 一次典型的发布：
 
