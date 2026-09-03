@@ -40,9 +40,10 @@ jobs:
           cache: pnpm
           registry-url: https://registry.npmjs.org
 
-      # Trusted publishing (OIDC) needs npm >= 11.5.1.
+      # Trusted publishing (OIDC) needs npm >= 11.5.1; npm 12 requires
+      # node ^22.22.2, newer than the pinned 22.22.0 runner.
       - name: Upgrade npm for trusted publishing
-        run: npm install --global npm@latest
+        run: npm install --global npm@11
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
