@@ -1,6 +1,6 @@
 {
   "name": "@jcy2387/dsh-conversation-ui",
-  "version": "0.1.2-alpha.3",
+  "version": "0.1.2-rc.1",
   "description": "DeepSeek Harness (dsh) plugin: Codex-style progress, tool activity, and final answers.",
   "license": "MIT",
   "type": "module",
