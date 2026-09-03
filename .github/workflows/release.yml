@@ -134,6 +134,11 @@ jobs:
             local name="$1"
             local archive="$2"
 
+            if [[ ! -f "$archive" ]]; then
+              echo "Archive $archive not found." >&2
+              return 1
+            fi
+
             if npm view "$name@$PACKAGE_VERSION" version >/dev/null 2>&1; then
               echo "$name@$PACKAGE_VERSION is already published; skipping npm publish."
               return 0
@@ -143,6 +148,8 @@ jobs:
             npm publish "$archive" --access public --provenance --tag "$DIST_TAG"
           }
 
-          publish_package '@jcy2387/dsh-codex-provider' "artifacts/jcy2387-dsh-codex-provider-$PACKAGE_VERSION.tgz"
-          publish_package '@jcy2387/dsh-conversation-ui' "artifacts/jcy2387-dsh-conversation-ui-$PACKAGE_VERSION.tgz"
-          publish_package '@jcy2387/dsh-suite' "artifacts/jcy2387-dsh-suite-$PACKAGE_VERSION.tgz"
+          # The ./ prefix is required: a bare "artifacts/..." path is parsed
+          # by npm as a GitHub user/repo shorthand instead of a local file.
+          publish_package '@jcy2387/dsh-codex-provider' "./artifacts/jcy2387-dsh-codex-provider-$PACKAGE_VERSION.tgz"
+          publish_package '@jcy2387/dsh-conversation-ui' "./artifacts/jcy2387-dsh-conversation-ui-$PACKAGE_VERSION.tgz"
+          publish_package '@jcy2387/dsh-suite' "./artifacts/jcy2387-dsh-suite-$PACKAGE_VERSION.tgz"
