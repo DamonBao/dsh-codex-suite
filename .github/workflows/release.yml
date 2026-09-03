@@ -1,0 +1,147 @@
+name: Release
+
+on:
+  release:
+    types:
+      - published
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: release-${{ github.event.release.tag_name }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Publish npm packages
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      RELEASE_TAG: ${{ github.event.release.tag_name }}
+
+    steps:
+      - name: Check out release tag
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.release.tag_name }}
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.7.0
+          run_install: false
+
+      - name: Set up Node.js and npm registry
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.22.0
+          cache: pnpm
+          registry-url: https://registry.npmjs.org
+
+      # Trusted publishing (OIDC) needs npm >= 11.5.1.
+      - name: Upgrade npm for trusted publishing
+        run: npm install --global npm@latest
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Verify release version and resolve dist tag
+        id: version
+        shell: bash
+        run: |
+          node --input-type=module <<'EOF'
+          import { readFile } from 'node:fs/promises'
+          import { appendFileSync } from 'node:fs'
+
+          const packages = ['codex-provider', 'conversation-ui', 'all']
+          const tagVersion = process.env.RELEASE_TAG.replace(/^v/, '')
+
+          let version
+          for (const dir of packages) {
+            const manifest = JSON.parse(await readFile(`packages/${dir}/package.json`, 'utf8'))
+            if (version === undefined) version = manifest.version
+            if (manifest.version !== version) {
+              throw new Error(`packages/${dir} is ${manifest.version}, expected ${version}: all three packages must share one version`)
+            }
+          }
+          if (tagVersion !== version) {
+            throw new Error(`release tag ${process.env.RELEASE_TAG} must match package version ${version}`)
+          }
+
+          // Channel dist tags: 0.1.2-alpha.4 -> alpha, 0.1.2-rc.1 -> rc, 0.2.0 -> latest.
+          const prerelease = version.split('+')[0].split('-').slice(1).join('-')
+          let distTag = 'latest'
+          if (prerelease) {
+            const channel = prerelease.split('.')[0]
+            distTag = /^[a-z][a-z0-9-]*$/i.test(channel) ? channel : 'next'
+          }
+
+          appendFileSync(process.env.GITHUB_OUTPUT, `package-version=${version}\n`)
+          appendFileSync(process.env.GITHUB_OUTPUT, `dist-tag=${distTag}\n`)
+          console.log(`releasing ${version} with dist-tag "${distTag}"`)
+          EOF
+
+      - name: Run quality gates
+        run: pnpm run check
+
+      - name: Pack npm tarballs
+        shell: bash
+        run: |
+          mkdir -p artifacts
+          pnpm --dir packages/codex-provider pack --pack-destination "$PWD/artifacts"
+          pnpm --dir packages/conversation-ui pack --pack-destination "$PWD/artifacts"
+          pnpm --dir packages/all pack --pack-destination "$PWD/artifacts"
+
+      - name: Verify packed suite bundle
+        shell: bash
+        env:
+          PACKAGE_VERSION: ${{ steps.version.outputs.package-version }}
+        run: |
+          mkdir -p artifacts/suite-manifest
+          tar -xzf "artifacts/jcy2387-dsh-suite-$PACKAGE_VERSION.tgz" -C artifacts/suite-manifest
+          node --input-type=module <<'EOF'
+          import { readFile } from 'node:fs/promises'
+
+          const manifest = JSON.parse(await readFile('artifacts/suite-manifest/package/package.json', 'utf8'))
+          const version = process.env.PACKAGE_VERSION
+
+          for (const [name, range] of Object.entries(manifest.dependencies ?? {})) {
+            if (String(range).startsWith('workspace:')) {
+              throw new Error(`suite dependency ${name} still carries workspace range ${range}`)
+            }
+            if (name.startsWith('@jcy2387/') && range !== version) {
+              throw new Error(`suite dependency ${name}@${range} does not match release version ${version}`)
+            }
+          }
+          console.log(`suite bundle dependencies resolved to ${version}`)
+          EOF
+
+      # Publishes via OIDC trusted publishing: no NPM_TOKEN secret is used.
+      # Each package is skipped when its version already exists on npm, so a
+      # re-run after a partial failure republishes only what is missing.
+      - name: Publish packages to npm with provenance
+        shell: bash
+        env:
+          PACKAGE_VERSION: ${{ steps.version.outputs.package-version }}
+          DIST_TAG: ${{ steps.version.outputs.dist-tag }}
+        run: |
+          set -euo pipefail
+
+          publish_package() {
+            local name="$1"
+            local archive="$2"
+
+            if npm view "$name@$PACKAGE_VERSION" version >/dev/null 2>&1; then
+              echo "$name@$PACKAGE_VERSION is already published; skipping npm publish."
+              return 0
+            fi
+
+            echo "Publishing $name@$PACKAGE_VERSION with dist-tag \"$DIST_TAG\"..."
+            npm publish "$archive" --access public --provenance --tag "$DIST_TAG"
+          }
+
+          publish_package '@jcy2387/dsh-codex-provider' "artifacts/jcy2387-dsh-codex-provider-$PACKAGE_VERSION.tgz"
+          publish_package '@jcy2387/dsh-conversation-ui' "artifacts/jcy2387-dsh-conversation-ui-$PACKAGE_VERSION.tgz"
+          publish_package '@jcy2387/dsh-suite' "artifacts/jcy2387-dsh-suite-$PACKAGE_VERSION.tgz"

@@ -151,7 +151,28 @@ pnpm --filter @jcy2387/dsh-conversation-ui build
 pnpm --dir packages/all pack --dry-run
 ```
 
-Tests run on [vitest](https://vitest.dev) — 14 suites covering the OAuth state machine, token refresh, network/proxy detection, usage parsing, the settings controllers, and the streaming client views. Client tests resolve the installed published DSH packages (a small module-table stand-in instantiates the shipped browser factory bundles). CI verifies release tags match all three package versions and audits the published tarball contents.
+Tests run on [vitest](https://vitest.dev) — 14 suites covering the OAuth state machine, token refresh, network/proxy detection, usage parsing, the settings controllers, and the streaming client views. Client tests resolve the installed published DSH packages (a small module-table stand-in instantiates the shipped browser factory bundles). CI verifies release tags match all three package versions and audits the published tarball contents, then runs a consumer smoke test that installs the packed tarballs into a scratch project (resolving the published peer ranges against the real registry) and imports every Node-side entry point.
+
+### Release
+
+Publishing is automated by the **Release** workflow ([`.github/workflows/release.yml`](.github/workflows/release.yml)), which runs whenever a GitHub Release is published. It requires the release tag to equal the shared version of all three packages (an optional `v` prefix is stripped), re-runs the full quality gates, packs the three tarballs, verifies the suite bundle no longer carries `workspace:` ranges, and publishes to npm in dependency order (provider → conversation UI → suite) with **provenance** via **OIDC trusted publishing** — no long-lived `NPM_TOKEN` secret is involved.
+
+One-time setup: configure [trusted publishing](https://docs.npmjs.com/trusted-publishing) on npmjs.com for `@jcy2387/dsh-codex-provider`, `@jcy2387/dsh-conversation-ui`, and `@jcy2387/dsh-suite`, each authorizing repository `DamonBao/dsh-codex-suite` with workflow `release.yml` (no environment).
+
+Prereleases are published under channel dist-tags derived from the version: `0.1.2-alpha.4` → `alpha`, `0.1.2-rc.1` → `rc`, and a stable `0.2.0` → `latest`. The workflow is idempotent — a package whose version already exists on npm is skipped, so a re-run after a partial failure republishes only what is missing.
+
+A typical release:
+
+```sh
+# bump the version in all three packages/*/package.json files, then:
+pnpm run check
+VERSION="$(node -p "require('./packages/codex-provider/package.json').version")"
+git commit -am "release: $VERSION"
+git tag "$VERSION"
+git push origin main --tags
+```
+
+Then create and publish a GitHub Release for that tag. Dependabot checks GitHub Actions dependencies weekly; npm updates are limited to tooling dev-dependencies because the `@deepseek-ai/*` toolchain is deliberately pinned in `pnpm-workspace.yaml`.
 
 ### Repository layout
 
@@ -169,7 +190,8 @@ Tests run on [vitest](https://vitest.dev) — 14 suites covering the OAuth state
 │  │  ├─ tests/           # 3 vitest suites
 │  │  └─ cordis.patch.yml
 │  └─ all/                # @jcy2387/dsh-suite (pure bundle, no runtime code)
-├─ .github/workflows/ci.yml
+├─ .github/workflows/ci.yml       # validate + tarball audit + consumer smoke
+├─ .github/workflows/release.yml  # npm publish on GitHub Release
 ├─ pnpm-workspace.yaml
 └─ README.md / README.zh.md
 ```

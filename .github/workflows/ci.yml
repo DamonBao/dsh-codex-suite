@@ -56,10 +56,11 @@ jobs:
         run: |
           node --input-type=module <<'EOF'
           import { readFile } from 'node:fs/promises'
+          const tagVersion = process.env.RELEASE_TAG.replace(/^v/, '')
           const packages = ['codex-provider', 'conversation-ui', 'all']
           for (const name of packages) {
             const manifest = JSON.parse(await readFile(`packages/${name}/package.json`, 'utf8'))
-            if (manifest.version !== process.env.RELEASE_TAG) {
+            if (manifest.version !== tagVersion) {
               throw new Error(`tag ${process.env.RELEASE_TAG} does not match packages/${name} version ${manifest.version}`)
             }
           }
@@ -98,3 +99,103 @@ jobs:
             echo 'unexpected runtime bundle in pure Suite package' >&2
             exit 1
           fi
+
+  consumer-smoke:
+    name: Consumer install + import smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.7.0
+          run_install: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.22.0
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build packages
+        run: pnpm run build
+
+      - name: Pack release candidates
+        shell: bash
+        run: |
+          mkdir -p artifacts
+          pnpm --dir packages/codex-provider pack --pack-destination "$PWD/artifacts"
+          pnpm --dir packages/conversation-ui pack --pack-destination "$PWD/artifacts"
+          pnpm --dir packages/all pack --pack-destination "$PWD/artifacts"
+
+      - name: Upload package artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: npm-packages-${{ github.sha }}
+          path: artifacts/*.tgz
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Install the tarballs as consumer dependencies
+        shell: bash
+        run: |
+          mkdir -p consumer
+          cd consumer
+          npm init --yes >/dev/null
+          # Resolves the published peer ranges against the real registry; a
+          # broken range fails the job instead of hiding behind the workspace.
+          # The three tarballs are installed together so the suite's pinned
+          # dependencies resolve to the local candidates, not the registry.
+          npm install --no-audit --no-fund \
+            ../artifacts/jcy2387-dsh-codex-provider-*.tgz \
+            ../artifacts/jcy2387-dsh-conversation-ui-*.tgz \
+            ../artifacts/jcy2387-dsh-suite-*.tgz
+
+      - name: Verify shipped artifact contract
+        working-directory: consumer
+        shell: bash
+        run: |
+          PROVIDER="node_modules/@jcy2387/dsh-codex-provider"
+          CONVERSATION="node_modules/@jcy2387/dsh-conversation-ui"
+          SUITE="node_modules/@jcy2387/dsh-suite"
+
+          test -f "$PROVIDER/lib/index.js"
+          test -f "$PROVIDER/lib/client.cjs"
+          test -f "$PROVIDER/lib/types/index.d.ts"
+          test -f "$PROVIDER/cordis.patch.yml"
+
+          test -f "$CONVERSATION/lib/index.js"
+          test -f "$CONVERSATION/lib/client.js"
+          test -f "$CONVERSATION/cordis.patch.yml"
+          test -f "$CONVERSATION/conversation-ui-off.yml"
+
+          test -f "$SUITE/cordis.patch.yml"
+          test ! -e "$SUITE/lib"
+
+      - name: Import every Node-side entry point
+        working-directory: consumer
+        shell: bash
+        run: |
+          node --input-type=module -e "
+            const provider = await import('@jcy2387/dsh-codex-provider');
+            if (provider.name !== 'codex-provider') throw new Error('provider entry missing name');
+            if (typeof provider.apply !== 'function') throw new Error('provider entry missing apply');
+            if (!provider.Config) throw new Error('provider entry missing Config');
+
+            const conversation = await import('@jcy2387/dsh-conversation-ui');
+            if (conversation.name !== 'dsh-conversation-ui') throw new Error('conversation-ui entry missing name');
+            if (typeof conversation.apply !== 'function') throw new Error('conversation-ui entry missing apply');
+            if (!conversation.Config) throw new Error('conversation-ui entry missing Config');
+
+            const suite = await import('@jcy2387/dsh-suite/package.json', { with: { type: 'json' } });
+            if (suite.default.name !== '@jcy2387/dsh-suite') throw new Error('suite package.json entry broken');
+
+            console.log('consumer import smoke passed');
+          "

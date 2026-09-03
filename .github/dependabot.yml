@@ -1,0 +1,38 @@
+version: 2
+
+updates:
+  # The @deepseek-ai/* toolchain is deliberately pinned in
+  # pnpm-workspace.yaml (overrides + minimumReleaseAgeExclude) for the
+  # 0.1.2-rc.1 peer closure, so it is excluded from automatic bumps.
+  - package-ecosystem: npm
+    directory: /packages/codex-provider
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    ignore:
+      - dependency-name: '@deepseek-ai/*'
+      - dependency-name: '@earendil-works/*'
+    groups:
+      development-dependencies:
+        dependency-type: development
+
+  - package-ecosystem: npm
+    directory: /packages/conversation-ui
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    ignore:
+      - dependency-name: '@deepseek-ai/*'
+    groups:
+      development-dependencies:
+        dependency-type: development
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      actions-dependencies:
+        patterns:
+          - '*'

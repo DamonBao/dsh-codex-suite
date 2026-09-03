@@ -151,7 +151,28 @@ pnpm --filter @jcy2387/dsh-conversation-ui build
 pnpm --dir packages/all pack --dry-run
 ```
 
-测试基于 [vitest](https://vitest.dev)，共 14 个套件，覆盖 OAuth 状态机、令牌刷新、网络/代理探测、用量解析、设置控制器和流式客户端视图。客户端测试直接解析已安装的 DSH 发布包（用一个小型 module-table 替身实例化其浏览器 factory bundle）。CI 会校验发布 tag 与三个包版本一致，并审计发布 tarball 的内容。
+测试基于 [vitest](https://vitest.dev)，共 14 个套件，覆盖 OAuth 状态机、令牌刷新、网络/代理探测、用量解析、设置控制器和流式客户端视图。客户端测试直接解析已安装的 DSH 发布包（用一个小型 module-table 替身实例化其浏览器 factory bundle）。CI 会校验发布 tag 与三个包版本一致、审计发布 tarball 的内容，并跑一个消费方冒烟测试：把打包出的 tarball 装进一个全新工程（用真实 registry 解析已发布的 peer 依赖区间），再导入全部 Node 侧入口。
+
+### 发布
+
+发布由 **Release** 工作流（[`.github/workflows/release.yml`](.github/workflows/release.yml)）自动完成：只要发布一个 GitHub Release 就会触发。它要求 release tag 与三个包的共同版本一致（允许可选的 `v` 前缀），重跑全部质量门禁，打包三个 tarball，校验 suite 组合包不再携带 `workspace:` 区间，然后按依赖顺序（provider → conversation-ui → suite）发布到 npm，自带 **provenance** 溯源，采用 **OIDC Trusted Publishing** 认证 —— 不需要任何长期有效的 `NPM_TOKEN` secret。
+
+一次性配置：在 npmjs.com 上为 `@jcy2387/dsh-codex-provider`、`@jcy2387/dsh-conversation-ui`、`@jcy2387/dsh-suite` 分别配置 [Trusted Publishing](https://docs.npmjs.com/trusted-publishing)，授权仓库 `DamonBao/dsh-codex-suite`、工作流 `release.yml`（environment 留空）。
+
+预发布版本按通道打 dist-tag：`0.1.2-alpha.4` → `alpha`，`0.1.2-rc.1` → `rc`，正式版 `0.2.0` → `latest`。工作流具备幂等性 —— 某个包的版本若已存在于 npm 则跳过，因此部分失败后重跑只会补发缺失的包。
+
+一次典型的发布：
+
+```sh
+# 先在三个 packages/*/package.json 里统一升版本号，然后：
+pnpm run check
+VERSION="$(node -p "require('./packages/codex-provider/package.json').version")"
+git commit -am "release: $VERSION"
+git tag "$VERSION"
+git push origin main --tags
+```
+
+随后为该 tag 创建并发布一个 GitHub Release 即可。Dependabot 每周检查 GitHub Actions 依赖；npm 依赖更新仅限工具链 devDependencies（`@deepseek-ai/*` 工具链已在 `pnpm-workspace.yaml` 中刻意锁版本，不参与自动升级）。
 
 ### 仓库结构
 
@@ -169,7 +190,8 @@ pnpm --dir packages/all pack --dry-run
 │  │  ├─ tests/           # 3 个 vitest 套件
 │  │  └─ cordis.patch.yml
 │  └─ all/                # @jcy2387/dsh-suite（纯组合包，无运行时代码）
-├─ .github/workflows/ci.yml
+├─ .github/workflows/ci.yml       # 校验 + tarball 审计 + 消费方冒烟
+├─ .github/workflows/release.yml  # GitHub Release 触发 npm 发布
 ├─ pnpm-workspace.yaml
 └─ README.md / README.zh.md
 ```
