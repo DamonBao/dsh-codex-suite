@@ -7,7 +7,7 @@
 
 [English](README.md) | 简体中文
 
-为 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)（DSH）打造的插件套件：把 **ChatGPT / OpenAI Codex 模型**和 **Codex 风格的对话体验**带进 DSH Web UI。基于 DSH `0.1.2-alpha.2` 构建（peer 范围 `>=0.1.2-alpha.2 <0.2.0`）。
+为 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)（DSH）打造的插件套件：把 **ChatGPT / OpenAI Codex 模型**和 **Codex 风格的对话体验**带进 DSH Web UI。基于 DSH `0.1.2-rc.1` 构建（peer 范围 `>=0.1.2-rc.1 <0.2.0`）。
 
 本仓库是 pnpm monorepo，包含两个相互独立的运行时插件和一个纯组合包：
 

@@ -7,7 +7,7 @@
 
 English | [简体中文](README.zh.md)
 
-A suite of [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) (DSH) plugins that brings **ChatGPT/OpenAI Codex models** and a **Codex-style conversation experience** to the DSH Web UI. Built against DSH `0.1.2-alpha.2` (peer range `>=0.1.2-alpha.2 <0.2.0`).
+A suite of [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) (DSH) plugins that brings **ChatGPT/OpenAI Codex models** and a **Codex-style conversation experience** to the DSH Web UI. Built against DSH `0.1.2-rc.1` (peer range `>=0.1.2-rc.1 <0.2.0`).
 
 The repository is a pnpm monorepo containing two independent runtime plugins and one pure bundle package:
 
