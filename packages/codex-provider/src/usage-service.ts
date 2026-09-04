@@ -34,6 +34,15 @@ function nullablePositive(value: unknown): number | null {
   return parsed !== undefined && parsed > 0 ? parsed : null
 }
 
+/** Count of banked resets; null when the endpoint did not report the summary. */
+function resetCreditsAvailable(value: unknown): number | null {
+  if (value === undefined || value === null) return null
+  const input = record(value)
+  const count = finiteNumber(input?.available_count)
+  // Promotional summary: degrade to unknown instead of failing the whole panel.
+  return count === undefined || count < 0 ? null : Math.trunc(count)
+}
+
 function parseWindow(value: unknown): CodexUsageWindow | null {
   if (value === undefined || value === null) return null
   const input = record(value)
@@ -92,14 +101,28 @@ export function parseCodexUsagePayload(value: unknown, fetchedAt = Date.now()): 
     primary,
     secondary,
     credits,
+    resetCreditsAvailable: resetCreditsAvailable(input.rate_limit_reset_credits),
   }
 }
 
-function accountIdOf(credential: Awaited<ReturnType<CredentialStore['read']>>): string | undefined {
+/** Resolve the non-secret ChatGPT account id of one stored OAuth credential. */
+export function codexAccountIdOf(
+  credential: Awaited<ReturnType<CredentialStore['read']>>,
+): string | undefined {
   if (credential?.type !== 'oauth') return undefined
   return typeof credential.accountId === 'string' && credential.accountId.length > 0
     ? credential.accountId
     : undefined
+}
+
+/** Build the account-scoped WHAM request headers for one resolved access token. */
+export function codexWhamHeaders(access: string, accountId: string | undefined): Headers {
+  const headers = new Headers({
+    accept: 'application/json',
+    authorization: `Bearer ${access}`,
+  })
+  if (accountId !== undefined) headers.set('chatgpt-account-id', accountId)
+  return headers
 }
 
 /** Fetch usage with a fresh pi-ai bearer while keeping all secrets on the Host. */
@@ -116,16 +139,10 @@ export class CodexUsageService {
     const access = auth?.auth.apiKey
     if (access === undefined || access.length === 0) return null
 
-    const accountId = accountIdOf(await this.credentials.read(CODEX_PROVIDER))
-    const headers = new Headers({
-      accept: 'application/json',
-      authorization: `Bearer ${access}`,
-    })
-    if (accountId !== undefined) headers.set('chatgpt-account-id', accountId)
-
+    const accountId = codexAccountIdOf(await this.credentials.read(CODEX_PROVIDER))
     const response = await this.fetcher(CODEX_USAGE_URL, {
       method: 'GET',
-      headers,
+      headers: codexWhamHeaders(access, accountId),
       signal: AbortSignal.timeout(USAGE_TIMEOUT_MS),
     })
     if (!response.ok) {

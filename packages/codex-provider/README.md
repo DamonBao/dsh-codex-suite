@@ -27,9 +27,19 @@ OpenAI Codex as an installable [DeepSeek Harness](https://github.com/deepseek-ai
 
 Fetched from the account-scoped ChatGPT endpoint (`chatgpt.com/backend-api/wham/usage`) and rendered in Settings:
 
-- Plan type and credits (balance, or *unlimited*).
+- Plan and credits (balance, or *unlimited*). Plans render under their user-facing names: `plus` → Plus, `prolite` → Pro 5x, `promax` / `pro` → Pro 20x, `free` → Free, and likewise for Team / Business / Enterprise / Education; unrecognized identifiers pass through unchanged so new tiers stay visible.
 - **Primary and secondary rate-limit windows** with used-percent progress bars and localized reset times.
 - A *limit reached* notice; auto-refreshes every 60 s while connected, plus a manual refresh button.
+
+### Banked rate-limit resets
+
+OpenAI grants eligible accounts one-time **banked resets** (launch and referral promotions) that can be redeemed to restore the 5-hour and weekly limit windows:
+
+- The usage dashboard shows the **available reset count** (riding the 60 s auto-refresh) and hides itself when the endpoint does not report the field; while resets exist, the same row also shows the **earliest expiry** (details are fetched silently whenever resets exist, falling back to the count alone on failure).
+- **Redeem a reset** only opens a confirmation dialog — nothing is redeemed yet: the dialog lists each reset by title and expiry (earliest first) with an explicit *cannot be undone* warning, and redemption runs only after a second **Redeem reset** click.
+- On confirm the Host calls the redemption endpoint (`wham/rate-limit-reset-credits/consume`) with a fresh idempotency key — **one request, no automatic retries**, so an ambiguous network failure never spends a second credit.
+- All four OpenAI result codes are localized (reset / already redeemed / nothing to reset / no credit); success silently refreshes usage and the remaining count.
+- Enabled only from loopback, like every other account action.
 
 ### Proxy-aware networking
 
@@ -70,7 +80,7 @@ The plugin works in headless profiles too — the Web client half is optional; a
 2. In the login modal choose **Browser login** (or **Device login** on a remote machine) and complete ChatGPT authorization. Progress is shown live; you can cancel at any time.
 3. Once connected, pick an `openai-codex` model in the normal model selector and start chatting.
 
-The same settings page also shows the usage dashboard and the proxy mode control while connected. Account actions (connect/disconnect/proxy) are only enabled when the Web UI is accessed from loopback.
+The same settings page also shows the usage dashboard (including banked resets) and the proxy mode control while connected; available resets can be redeemed from a confirmation dialog. Account actions (connect/disconnect/reset/proxy) are only enabled when the Web UI is accessed from loopback.
 
 ## Configuration
 
@@ -103,10 +113,10 @@ Example overlay:
 
 The package ships two halves:
 
-- **Host half** (`src/`, exported from the package root) — a Cordis plugin injecting `llm`, `credentials`, and `settings`. It owns the OAuth lifecycle (`CodexAuthService`), token refresh (`CodexTokenRefresher`), network manager, usage service, and registers the provider through `PiAiAdapter` (backed by `@earendil-works/pi-ai`'s `openaiCodexProvider`). The model catalog is validated at load (context window / max tokens must be usable for context budgeting and compaction).
+- **Host half** (`src/`, exported from the package root) — a Cordis plugin injecting `llm`, `credentials`, and `settings`. It owns the OAuth lifecycle (`CodexAuthService`), token refresh (`CodexTokenRefresher`), network manager, usage service, and banked-reset service (`CodexResetService`), and registers the provider through `PiAiAdapter` (backed by `@earendil-works/pi-ai`'s `openaiCodexProvider`). The model catalog is validated at load (context window / max tokens must be usable for context budgeting and compaction).
 - **Web half** (`src/client/`, bundled to `lib/client.cjs` and discovered via the `dsh.client` manifest) — a React settings section registered into the Web UI's Settings page, localized in Chinese and English.
 
-The halves talk over one **loopback-authority RPC channel** (`status`, `network`, `setProxyMode`, `usage`, `login`, `cancel`, `logout`). Failure reasons crossing this boundary are enum values, not error text.
+The halves talk over one **loopback-authority RPC channel** (`status`, `network`, `setProxyMode`, `usage`, `reset-credits`, `reset-credits/consume`, `login`, `cancel`, `logout`). Failure reasons crossing this boundary are enum values, not error text.
 
 ## Development
 
@@ -117,7 +127,7 @@ pnpm --filter @jcy2387/dsh-codex-provider test
 pnpm --filter @jcy2387/dsh-codex-provider build
 ```
 
-Ten vitest suites cover the auth state machine and failure classification, the IPv6 callback bridge, terminal-vs-transient refresh detection, proxy discovery (macOS / Windows / Linux / env), usage parsing and redaction, the settings card controller, and the RPC contract.
+Eleven vitest suites cover the auth state machine and failure classification, the IPv6 callback bridge, terminal-vs-transient refresh detection, proxy discovery (macOS / Windows / Linux / env), usage parsing and redaction, banked-reset listing/redeeming/idempotency, the settings card controller, and the RPC contract.
 
 See the [monorepo README](../../README.md) for workspace-wide commands.
 

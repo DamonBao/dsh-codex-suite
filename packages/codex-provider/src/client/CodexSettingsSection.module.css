@@ -166,6 +166,14 @@
   gap: 16px;
 }
 
+.usageActions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
 .usageTitle {
   margin: 0;
   color: var(--dsw-alias-label-primary);
@@ -198,6 +206,10 @@
 .usageFacts dd {
   margin: 0;
   overflow-wrap: anywhere;
+}
+
+.factHint {
+  color: var(--dsw-alias-label-tertiary);
 }
 
 .usageLimit {
@@ -283,6 +295,93 @@
   line-height: 1.5;
 }
 
+.resetList {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 4px;
+}
+
+.resetList .hint {
+  margin: 0;
+}
+
+.resetCredits {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.resetCredit {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 10px;
+  background: var(--dsw-alias-bg-layer-2);
+  padding: 10px 12px;
+}
+
+.resetCreditTitle {
+  color: var(--dsw-alias-label-primary);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.resetCreditMeta {
+  flex: none;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 11px;
+  line-height: 1.45;
+  text-align: right;
+}
+
+.resetMore,
+.resetNone {
+  margin: 0;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.resetResult {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.resetResultText {
+  margin: 4px 0 0;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.resetResultMeta {
+  margin: 0;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.resetFailure {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.resetFailure .error {
+  margin: 0;
+}
+
 .loginFailure {
   display: flex;
   flex-direction: column;
@@ -361,6 +460,16 @@
   .proxySettings {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .resetCredit {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 3px;
+  }
+
+  .resetCreditMeta {
+    text-align: left;
   }
 
   .usageWindowMeta {

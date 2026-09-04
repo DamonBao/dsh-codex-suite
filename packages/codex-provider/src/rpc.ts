@@ -6,6 +6,8 @@ import type {
   CodexLoginMethod,
   CodexNetworkState,
   CodexProxyMode,
+  CodexResetCreditsSnapshot,
+  CodexResetRedeemOutcome,
   CodexUsageSnapshot,
 } from './types.ts'
 export { CODEX_AUTH_RPC_CHANNEL } from './rpc-contract.ts'
@@ -16,6 +18,8 @@ export interface CodexRpcService {
   network(): Promise<CodexNetworkState>
   setProxyMode(mode: CodexProxyMode): Promise<CodexNetworkState>
   usage(): Promise<CodexUsageSnapshot | null>
+  resetCredits(): Promise<CodexResetCreditsSnapshot | null>
+  redeemResetCredit(creditId: string | null): Promise<CodexResetRedeemOutcome | null>
   login(method: CodexLoginMethod): CodexAuthState
   cancel(): Promise<CodexAuthState>
   logout(): Promise<CodexAuthState>
@@ -27,13 +31,14 @@ export async function handleCodexAuthRpc(
   endpoint: string,
   payload: unknown,
 ): Promise<RpcResult<unknown>> {
-  if (endpoint === 'status' || endpoint === 'network' || endpoint === 'usage'
+  if (endpoint === 'status' || endpoint === 'network' || endpoint === 'usage' || endpoint === 'reset-credits'
     || endpoint === 'cancel' || endpoint === 'logout') {
     if (!isEmptyRecord(payload)) return badRequest(`${endpoint} expects an empty payload`)
     try {
       if (endpoint === 'status') return { ok: true, value: await service.status() }
       if (endpoint === 'network') return { ok: true, value: await service.network() }
       if (endpoint === 'usage') return { ok: true, value: await service.usage() }
+      if (endpoint === 'reset-credits') return { ok: true, value: await service.resetCredits() }
       if (endpoint === 'cancel') return { ok: true, value: await service.cancel() }
       return { ok: true, value: await service.logout() }
     } catch {
@@ -47,6 +52,20 @@ export async function handleCodexAuthRpc(
     }
     try {
       return { ok: true, value: await service.setProxyMode(payload.mode) }
+    } catch {
+      return internalError()
+    }
+  }
+  if (endpoint === 'reset-credits/consume') {
+    const creditId = isRecord(payload) ? payload.creditId : undefined
+    if (!isRecord(payload)
+      || Object.keys(payload).some(key => key !== 'creditId')
+      || (creditId !== undefined && creditId !== null
+        && (typeof creditId !== 'string' || creditId.length === 0))) {
+      return badRequest('reset-credits/consume expects { creditId: string | null }')
+    }
+    try {
+      return { ok: true, value: await service.redeemResetCredit(creditId ?? null) }
     } catch {
       return internalError()
     }

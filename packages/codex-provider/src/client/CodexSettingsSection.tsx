@@ -12,11 +12,13 @@ import type {
   CodexNetworkIssue,
   CodexNetworkRoute,
   CodexProxyMode,
+  CodexResetCredit,
+  CodexResetRedeemOutcome,
   CodexUsageWindow,
 } from '../types.ts'
 import type { CodexAuthCardFace, CodexAuthCardState } from './controller.ts'
 import type { CodexSettingsKey } from './locales.ts'
-import { formatResetTime, formatUsageNumber } from './locale-format.ts'
+import { formatCodexPlanName, formatResetTime, formatUsageNumber } from './locale-format.ts'
 import { OpenAILogo } from './OpenAILogo.tsx'
 import css from './CodexSettingsSection.module.css'
 
@@ -243,16 +245,117 @@ function UsageWindowRow({
   )
 }
 
+/** Banked resets that can still be redeemed, earliest expiration first. */
+function redeemableCredits(state: CodexAuthCardState): readonly CodexResetCredit[] {
+  const credits = state.resetCredits?.credits ?? []
+  return credits
+    .filter(credit => credit.status === 'available')
+    .slice()
+    .sort((a, b) => (a.expiresAt ?? Number.POSITIVE_INFINITY) - (b.expiresAt ?? Number.POSITIVE_INFINITY))
+}
+
+/** Earliest expiry among redeemable resets, or null when none reports one. */
+function earliestResetExpiry(state: CodexAuthCardState): number | null {
+  const expiries = redeemableCredits(state)
+    .map(credit => credit.expiresAt)
+    .filter((expiry): expiry is number => expiry !== null)
+  return expiries.length === 0 ? null : Math.min(...expiries)
+}
+
+function ResetResultBody({
+  outcome,
+  locale,
+  t,
+}: {
+  outcome: CodexResetRedeemOutcome
+  locale: string
+  t: Translate
+}): ReactNode {
+  const windowsReset = outcome.outcome === 'reset' || outcome.outcome === 'already-redeemed'
+    ? outcome.windowsReset
+    : null
+  switch (outcome.outcome) {
+    case 'reset':
+      return (
+        <div className={css.resetResult} role="status">
+          <p className={css.resetResultText}>{t('resetResultReset')}</p>
+          {windowsReset === null ? null : (
+            <p className={css.resetResultMeta}>
+              {formatUsageNumber(windowsReset, locale)} {t('resetResultWindowsReset')}
+            </p>
+          )}
+        </div>
+      )
+    case 'already-redeemed': return <p className={css.resetResultText} role="status">{t('resetResultAlreadyRedeemed')}</p>
+    case 'nothing-to-reset': return <p className={css.resetResultText} role="status">{t('resetResultNothingToReset')}</p>
+    case 'no-credit': return <p className={css.resetResultText} role="status">{t('resetResultNoCredit')}</p>
+    default: return null
+  }
+}
+
+function ResetRedeemBody({
+  state,
+  locale,
+  t,
+  retry,
+}: {
+  state: CodexAuthCardState
+  locale: string
+  t: Translate
+  retry: () => void
+}): ReactNode {
+  if (state.resetStatus === 'loading') return <p className={css.waiting}>{t('resetLoading')}</p>
+  if (state.resetStatus === 'error' || state.resetCredits === null) {
+    return (
+      <div className={css.resetFailure} role="status">
+        <p className={css.error}>{t('resetUnavailable')}</p>
+        <Button size="sm" variant="outline" onClick={retry}>{t('retry')}</Button>
+      </div>
+    )
+  }
+  const credits = redeemableCredits(state)
+  const available = state.resetCredits.availableCount
+  return (
+    <div className={css.resetList}>
+      <p className={css.hint}>{t('resetHint')}</p>
+      {available === 0
+        ? <p className={css.resetNone} role="status">{t('resetNoneAvailable')}</p>
+        : (
+          <>
+            <ul className={css.resetCredits}>
+              {credits.map(credit => (
+                <li key={credit.id} className={css.resetCredit}>
+                  <span className={css.resetCreditTitle}>{credit.title ?? t('resetCreditFallbackTitle')}</span>
+                  <span className={css.resetCreditMeta}>
+                    {t('resetCreditExpiresLabel')}{' '}
+                    {credit.expiresAt === null
+                      ? t('resetCreditNoExpiry')
+                      : <time dateTime={new Date(credit.expiresAt).toISOString()}>{formatResetTime(credit.expiresAt, locale)}</time>}
+                  </span>
+                </li>
+              ))}
+            </ul>
+            {available > credits.length ? <p className={css.resetMore}>{t('resetMoreCredits')}</p> : null}
+          </>
+        )}
+    </div>
+  )
+}
+
 function UsagePanel({
   state,
   locale,
   t,
   refresh,
+  isLoopback,
+  openRedeem,
 }: {
   state: CodexAuthCardState
   locale: string
   t: Translate
   refresh: () => void
+  isLoopback: boolean
+  openRedeem: () => void
 }): ReactNode {
   const usage = state.usage
   const credits = usage?.credits
@@ -261,18 +364,36 @@ function UsagePanel({
     : credits?.hasCredits === true && credits.balance !== null
       ? formatUsageNumber(credits.balance, locale)
       : null
+  const resetsAvailable = usage?.resetCreditsAvailable ?? null
+  const resetExpiryAt = resetsAvailable !== null && resetsAvailable > 0
+    ? earliestResetExpiry(state)
+    : null
   return (
     <div className={css.usagePanel}>
       <div className={css.usageHead}>
         <h3 className={css.usageTitle}>{t('usageTitle')}</h3>
-        <Button
-          size="sm"
-          variant="outline"
-          disabled={state.usageStatus === 'loading'}
-          onClick={refresh}
-        >
-          {t('refreshUsage')}
-        </Button>
+        <div className={css.usageActions}>
+          {resetsAvailable !== null && resetsAvailable > 0
+            ? (
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={!isLoopback || state.action !== null}
+                onClick={openRedeem}
+              >
+                {t('resetUsageButton')}
+              </Button>
+            )
+            : null}
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={state.usageStatus === 'loading'}
+            onClick={refresh}
+          >
+            {t('refreshUsage')}
+          </Button>
+        </div>
       </div>
       {state.usageStatus === 'loading' && usage === null
         ? <p className={css.usageMessage}>{t('usageLoading')}</p>
@@ -284,16 +405,36 @@ function UsagePanel({
         ? null
         : (
           <>
-            {usage.planType === null && creditLabel === null
+            {usage.planType === null && creditLabel === null && resetsAvailable === null
               ? null
               : (
                 <dl className={css.usageFacts}>
                   {usage.planType === null
                     ? null
-                    : <><dt>{t('planLabel')}</dt><dd>{usage.planType}</dd></>}
+                    : <><dt>{t('planLabel')}</dt><dd>{formatCodexPlanName(usage.planType, locale)}</dd></>}
                   {creditLabel === null
                     ? null
                     : <><dt>{t('creditsLabel')}</dt><dd>{creditLabel}</dd></>}
+                  {resetsAvailable === null
+                    ? null
+                    : (
+                      <>
+                        <dt>{t('resetCreditsLabel')}</dt>
+                        <dd>
+                          {resetsAvailable}
+                          {resetExpiryAt === null
+                            ? null
+                            : (
+                              <span className={css.factHint}>
+                                {` · ${t('resetEarliestExpiry')} `}
+                                <time dateTime={new Date(resetExpiryAt).toISOString()}>
+                                  {formatResetTime(resetExpiryAt, locale)}
+                                </time>
+                              </span>
+                            )}
+                        </dd>
+                      </>
+                    )}
                 </dl>
               )}
             {usage.limitReached ? <p className={css.usageLimit} role="status">{t('limitReached')}</p> : null}
@@ -325,6 +466,7 @@ export function CodexSettingsSection(props: CodexSettingsSectionProps): ReactNod
   const state = props.useCodexAuth(snapshot => snapshot)
   const [loginOpen, setLoginOpen] = useState(false)
   const [logoutOpen, setLogoutOpen] = useState(false)
+  const [redeemOpen, setRedeemOpen] = useState(false)
   const configuredProxyMode = state.network?.configuredProxyMode ?? 'auto'
   const [proxyMode, setProxyMode] = useState<CodexProxyMode>(configuredProxyMode)
   const active = isLoginActive(state.auth)
@@ -354,6 +496,44 @@ export function CodexSettingsSection(props: CodexSettingsSectionProps): ReactNod
     setLoginOpen(true)
     props.login(method)
   }
+  const openRedeem = useCallback(() => {
+    setRedeemOpen(true)
+    props.loadResetCredits()
+  }, [props.loadResetCredits])
+  const closeRedeem = (): void => {
+    if (closeState.current.action === 'reset-redeem') return
+    setRedeemOpen(false)
+  }
+
+  const redeemAvailable = state.resetStatus === 'ready'
+    && state.resetCredits !== null
+    && state.resetCredits.availableCount > 0
+  const redeemFooter = state.redeemStatus === 'redeeming'
+    ? (
+      <Button variant="primary" disabled>{t('resetting')}</Button>
+    )
+    : state.redeemStatus === 'done'
+      ? (
+        <Button variant="primary" onClick={closeRedeem}>{t('close')}</Button>
+      )
+      : (
+        <>
+          <Button
+            variant="outline"
+            disabled={state.action === 'reset-redeem'}
+            onClick={() => { setRedeemOpen(false) }}
+          >
+            {t('cancel')}
+          </Button>
+          <Button
+            variant="primary"
+            disabled={!props.isLoopback || state.action !== null || !redeemAvailable}
+            onClick={() => { props.redeemResetCredit() }}
+          >
+            {t('resetConfirm')}
+          </Button>
+        </>
+      )
 
   const loginFooter = active
     ? (
@@ -456,8 +636,43 @@ export function CodexSettingsSection(props: CodexSettingsSectionProps): ReactNod
       </div>
 
       {state.auth.phase === 'connected'
-        ? <UsagePanel state={state} locale={locale} t={t} refresh={props.load} />
+        ? (
+          <UsagePanel
+            state={state}
+            locale={locale}
+            t={t}
+            refresh={props.load}
+            isLoopback={props.isLoopback}
+            openRedeem={openRedeem}
+          />
+        )
         : null}
+
+      <Modal
+        open={props.isLoopback && redeemOpen && state.auth.phase === 'connected'}
+        onClose={closeRedeem}
+        title={t('resetTitle')}
+        closeLabel={t('close')}
+        description={t('resetDescription')}
+        footer={redeemFooter}
+      >
+        {state.redeemStatus === 'redeeming'
+          ? <p className={css.waiting}>{t('resetting')}</p>
+          : state.redeemStatus === 'done' && state.redeemResult !== null
+            ? <ResetResultBody outcome={state.redeemResult} locale={locale} t={t} />
+            : (
+              <ResetRedeemBody
+                state={state}
+                locale={locale}
+                t={t}
+                retry={() => { props.loadResetCredits() }}
+              />
+            )}
+        {state.redeemStatus === 'error'
+          ? <p className={css.error} role="status">{t('resetFailed')}</p>
+          : null}
+        {!props.isLoopback ? <p className={css.error} role="status">{t('remoteHint')}</p> : null}
+      </Modal>
 
       <Modal
         open={props.isLoopback && (loginOpen || active || state.action === 'login') && state.auth.phase !== 'connected'}

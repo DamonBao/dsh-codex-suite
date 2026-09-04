@@ -29,6 +29,7 @@ import { startCodexIpv6CallbackBridge } from './callback-bridge.ts'
 import { CODEX_PROVIDER, CodexCredentialStore } from './credential-store.ts'
 import { CodexNetworkManager } from './network.ts'
 import { codexDispatchProvider } from './provider.ts'
+import { CodexResetService } from './reset-service.ts'
 import { CODEX_AUTH_RPC_CHANNEL, handleCodexAuthRpc } from './rpc.ts'
 import { CodexTokenRefresher } from './token-resolver.ts'
 import type { CodexNetworkState, CodexProxyMode } from './types.ts'
@@ -38,6 +39,7 @@ export { CodexAuthService } from './auth-service.ts'
 export type { CodexAuthModels } from './auth-service.ts'
 export { CodexTokenRefresher } from './token-resolver.ts'
 export type { CodexRefreshSink, CodexTokenRefresherOptions } from './token-resolver.ts'
+export { CodexResetService, parseCodexResetCreditsPayload, parseCodexResetRedeemPayload } from './reset-service.ts'
 export { CodexUsageService, parseCodexUsagePayload } from './usage-service.ts'
 export type { CodexUsageModels } from './usage-service.ts'
 export type * from './types.ts'
@@ -261,6 +263,7 @@ export function apply(ctx: Context, config: Config): void {
   ctx.llm.registerAdapter([CODEX_PROVIDER], adapter)
 
   const usage = new CodexUsageService(refresher, credentials)
+  const reset = new CodexResetService(refresher, credentials)
   const rpcService = {
     status: () => auth.status(),
     network: async () => networkSnapshot(),
@@ -273,6 +276,26 @@ export function apply(ctx: Context, config: Config): void {
         return await usage.load()
       } catch (error) {
         ctx.logger('dsh-codex-provider').warn(new Error('OpenAI Codex usage lookup failed', { cause: error }))
+        throw error
+      }
+    },
+    resetCredits: async () => {
+      try {
+        return await reset.list()
+      } catch (error) {
+        ctx.logger('dsh-codex-provider').warn(
+          new Error('OpenAI Codex reset-credits lookup failed', { cause: error }),
+        )
+        throw error
+      }
+    },
+    redeemResetCredit: async (creditId: string | null) => {
+      try {
+        return await reset.redeem(creditId)
+      } catch (error) {
+        ctx.logger('dsh-codex-provider').warn(
+          new Error('OpenAI Codex reset redemption failed', { cause: error }),
+        )
         throw error
       }
     },

@@ -8,11 +8,16 @@ import type {
   CodexLoginMethod,
   CodexNetworkState,
   CodexProxyMode,
+  CodexResetCreditsSnapshot,
+  CodexResetRedeemOutcome,
   CodexUsageSnapshot,
 } from '../types.ts'
 
 /** One UI action crossing the wire. */
-export type CodexAuthAction = 'login' | 'cancel' | 'logout' | 'proxy-mode'
+export type CodexAuthAction = 'login' | 'cancel' | 'logout' | 'proxy-mode' | 'reset-redeem'
+
+/** Lifecycle of one banked-reset redemption attempt. */
+export type CodexRedeemStatus = 'idle' | 'redeeming' | 'done' | 'error'
 
 /** Snapshot rendered by the settings page. */
 export interface CodexAuthCardState {
@@ -22,6 +27,10 @@ export interface CodexAuthCardState {
   network: CodexNetworkState | null
   usageStatus: 'idle' | 'loading' | 'ready' | 'error'
   usage: CodexUsageSnapshot | null
+  resetStatus: 'idle' | 'loading' | 'ready' | 'error'
+  resetCredits: CodexResetCreditsSnapshot | null
+  redeemStatus: CodexRedeemStatus
+  redeemResult: CodexResetRedeemOutcome | null
   action: CodexAuthAction | null
   actionFailed: boolean
 }
@@ -35,6 +44,8 @@ export interface CodexAuthCardFace {
   load: () => void
   refresh: () => void
   setProxyMode: (mode: CodexProxyMode) => void
+  loadResetCredits: () => void
+  redeemResetCredit: () => void
   login: (method: CodexLoginMethod) => void
   cancel: () => void
   logout: () => void
@@ -49,11 +60,16 @@ export class CodexAuthCardController {
     network: null,
     usageStatus: 'idle',
     usage: null,
+    resetStatus: 'idle',
+    resetCredits: null,
+    redeemStatus: 'idle',
+    redeemResult: null,
     action: null,
     actionFailed: false,
   })
 
   private loadGeneration = 0
+  private resetGeneration = 0
 
   constructor(private readonly remote: CodexAuthRpcClient) {}
 
@@ -86,7 +102,7 @@ export class CodexAuthCardController {
         state.status = 'error'
         state.actionFailed = false
       }
-      if (state.auth.phase !== 'connected') state.usage = null
+      if (state.auth.phase !== 'connected') this.clearResetState(state)
     })
 
     const networkResult = await networkTask
@@ -110,6 +126,15 @@ export class CodexAuthCardController {
         state.usageStatus = 'error'
       }
     })
+    // The usage summary carries only the available count; when resets exist,
+    // silently refresh the listing too so the panel can show the earliest
+    // expiry next to the count. Failures leave the count-only display intact.
+    const resetsAvailable = usageResult?.ok === true
+      ? usageResult.value?.resetCreditsAvailable ?? 0
+      : 0
+    if (resetsAvailable > 0 && this.store.getSnapshot().auth.phase === 'connected') {
+      void this.runResetCredits(true)
+    }
   }
 
   private accept(auth: CodexAuthState): void {
@@ -121,8 +146,92 @@ export class CodexAuthCardController {
       if (auth.phase !== 'connected') {
         state.usageStatus = 'idle'
         state.usage = null
+        this.clearResetState(state)
       }
     })
+  }
+
+  /** Drop banked-reset state; only a connected account can hold resets. */
+  private clearResetState(state: CodexAuthCardState): void {
+    state.resetStatus = 'idle'
+    state.resetCredits = null
+    state.redeemStatus = 'idle'
+    state.redeemResult = null
+  }
+
+  /**
+   * Load the banked-reset listing for the redemption dialog. A non-silent
+   * invocation also clears any previous redemption result, so reopening the
+   * dialog starts from a clean confirmation state.
+   */
+  loadResetCredits(silent = false): void {
+    void this.runResetCredits(silent)
+  }
+
+  private async runResetCredits(silent: boolean): Promise<void> {
+    const generation = ++this.resetGeneration
+    if (!silent) {
+      this.store.update((state) => {
+        state.resetStatus = 'loading'
+        state.resetCredits = null
+        state.redeemStatus = 'idle'
+        state.redeemResult = null
+      })
+    }
+    try {
+      const result = await this.remote.resetCredits()
+      if (generation !== this.resetGeneration) return
+      if (!result.ok || result.value === null) throw new Error('Codex reset-credits RPC failed')
+      this.store.update((state) => {
+        state.resetStatus = 'ready'
+        state.resetCredits = result.value
+      })
+    } catch {
+      if (generation !== this.resetGeneration) return
+      this.store.update((state) => {
+        state.resetStatus = 'error'
+        state.resetCredits = null
+      })
+    }
+  }
+
+  /** Redeem one banked reset; OpenAI chooses the credit when several exist. */
+  redeemResetCredit(): void {
+    void this.runRedeem()
+  }
+
+  private async runRedeem(): Promise<void> {
+    if (this.store.getSnapshot().action !== null) return
+    ++this.loadGeneration
+    ++this.resetGeneration
+    this.store.update((state) => {
+      state.action = 'reset-redeem'
+      state.actionFailed = false
+      state.redeemStatus = 'redeeming'
+      state.redeemResult = null
+    })
+    let redeemed = false
+    try {
+      const result = await this.remote.redeemResetCredit(null)
+      if (!result.ok || result.value === null) throw new Error('Codex reset redemption RPC failed')
+      redeemed = true
+      this.store.update((state) => {
+        state.action = null
+        state.redeemStatus = 'done'
+        state.redeemResult = result.value
+      })
+    } catch {
+      this.store.update((state) => {
+        state.action = null
+        state.redeemStatus = 'error'
+        state.redeemResult = null
+      })
+    }
+    if (!redeemed) return
+    // Redemption already invalidated the old windows and counts server-side;
+    // refresh both silently so the dialog shows the post-reset truth.
+    void this.load(true)
+    void this.runResetCredits(true)
   }
 
   setProxyMode(mode: CodexProxyMode): void {
@@ -170,7 +279,10 @@ export class CodexAuthCardController {
     operation: () => ReturnType<CodexAuthRpcClient['status']>,
   ): Promise<void> {
     if (this.store.getSnapshot().action !== null) return
+    // Auth changes invalidate every in-flight read, including a banked-reset
+    // refresh, so a stale reply cannot resurrect reset state after logout.
     ++this.loadGeneration
+    ++this.resetGeneration
     this.store.update((state) => {
       state.action = action
       state.actionFailed = false
@@ -195,6 +307,8 @@ export class CodexAuthCardController {
       load: () => { void this.load() },
       refresh: () => { void this.load(true) },
       setProxyMode: mode => { this.setProxyMode(mode) },
+      loadResetCredits: () => { this.loadResetCredits() },
+      redeemResetCredit: () => { this.redeemResetCredit() },
       login: method => { this.login(method) },
       cancel: () => { this.cancel() },
       logout: () => { this.logout() },

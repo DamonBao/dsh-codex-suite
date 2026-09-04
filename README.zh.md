@@ -28,7 +28,8 @@
 - **双流程 ChatGPT OAuth。** 浏览器登录 + 设备码兜底。登录失败会被归类为无敏感信息的本地化原因（区域受限、回调端口冲突、令牌交换错误、网络问题……），而不是裸报错堆栈。
 - **IPv6 回环回调桥。** pi-ai 的 OAuth 监听只绑 IPv4；在 IPv6 优先的主机上，套件会透明转发回环回调，登录依然可用。
 - **主动令牌刷新。** 访问令牌在过期前约 5 分钟轮换，失败按退避重试；刷新令牌失效会被精确识别并提示「需要重新连接」，而不是在流式中途崩掉。
-- **用量面板。** 从 ChatGPT 账号级接口获取套餐类型、Credits、主/次限额窗口的用量百分比条和重置时间。
+- **用量面板。** 从 ChatGPT 账号级接口获取套餐（以 Plus / Pro 5x / Pro 20x 等对外名称显示）、Credits、主/次限额窗口的用量百分比条和重置时间。
+- **重置次数（额度银行）。** 查看账号可用的 banked reset 次数与最早到期时间，并在确认弹窗中一键兑换，恢复 5 小时与每周限额窗口。
 - **代理感知网络。** 自动探测环境变量与系统代理（macOS / Windows / Linux），仅让 OpenAI 流量走代理、回环保持直连，并提供显式代理模式（auto / environment / off）。
 - **可靠性优先的默认值。** 默认 SSE 传输（避免 WebSocket 后期失败导致部分输出重复）、5 分钟流空闲超时、可配置重试策略。
 - **原生设置页** 位于 *设置 → OpenAI Codex*，中英文界面、实时状态，RPC 仅限 loopback 权限——凭据绝不离开 Host。
@@ -118,7 +119,7 @@ dsh web
 
 | 位置 | 可控内容 |
 | --- | --- |
-| 设置 → OpenAI Codex | 连接/断开账号、登录方式、用量面板、代理模式。 |
+| 设置 → OpenAI Codex | 连接/断开账号、登录方式、用量面板、重置次数查看与兑换、代理模式。 |
 | 设置 → 插件 → 插件配置 | 自动展开思考（实时生效）、插件版本、npm 安装一键更新。 |
 
 ## 架构
@@ -151,7 +152,7 @@ pnpm --filter @jcy2387/dsh-conversation-ui build
 pnpm --dir packages/all pack --dry-run
 ```
 
-测试基于 [vitest](https://vitest.dev)，共 14 个套件，覆盖 OAuth 状态机、令牌刷新、网络/代理探测、用量解析、设置控制器和流式客户端视图。客户端测试直接解析已安装的 DSH 发布包（用一个小型 module-table 替身实例化其浏览器 factory bundle）。CI 会校验发布 tag 与三个包版本一致、审计发布 tarball 的内容，并跑一个消费方冒烟测试：把打包出的 tarball 装进一个全新工程（用真实 registry 解析已发布的 peer 依赖区间），再导入全部 Node 侧入口。
+测试基于 [vitest](https://vitest.dev)，共 15 个套件，覆盖 OAuth 状态机、令牌刷新、网络/代理探测、用量与重置次数解析、设置控制器和流式客户端视图。客户端测试直接解析已安装的 DSH 发布包（用一个小型 module-table 替身实例化其浏览器 factory bundle）。CI 会校验发布 tag 与三个包版本一致、审计发布 tarball 的内容，并跑一个消费方冒烟测试：把打包出的 tarball 装进一个全新工程（用真实 registry 解析已发布的 peer 依赖区间），再导入全部 Node 侧入口。
 
 ### 发布
 
@@ -180,9 +181,9 @@ git push origin main --tags
 .
 ├─ packages/
 │  ├─ codex-provider/     # @jcy2387/dsh-codex-provider
-│  │  ├─ src/             # Host 半：OAuth、刷新、网络、用量、LLM 适配器
+│  │  ├─ src/             # Host 半：OAuth、刷新、网络、用量、重置次数、LLM 适配器
 │  │  ├─ src/client/      # Web 半：设置分区 UI
-│  │  ├─ tests/           # 11 个 vitest 套件
+│  │  ├─ tests/           # 12 个 vitest 套件
 │  │  └─ cordis.patch.yml
 │  ├─ conversation-ui/    # @jcy2387/dsh-conversation-ui
 │  │  ├─ src/             # Host 半：配置桥、设置 RPC

@@ -30,3 +30,49 @@ export function formatResetTime(timestamp: number | null, locale: string): strin
 export function formatUsageNumber(value: number, locale: string): string {
   return numberFormatter(locale).format(value)
 }
+
+/** User-facing English names for OpenAI's internal plan_type identifiers. */
+const PLAN_NAMES_EN: Readonly<Record<string, string>> = {
+  free: 'Free',
+  go: 'Go',
+  plus: 'Plus',
+  prolite: 'Pro 5x',
+  promax: 'Pro 20x',
+  // The pre-split $200 Pro tier carries 20x-tier usage, like Pro Max.
+  pro: 'Pro 20x',
+  team: 'Team',
+  self_serve_business_usage_based: 'Business',
+  business: 'Business',
+  enterprise_cbp_usage_based: 'Enterprise',
+  enterprise: 'Enterprise',
+  edu: 'Education',
+  unknown: 'Unknown',
+}
+
+/** User-facing Chinese names for OpenAI's internal plan_type identifiers. */
+const PLAN_NAMES_ZH: Readonly<Record<string, string>> = {
+  free: '免费版',
+  go: 'Go',
+  plus: 'Plus',
+  prolite: 'Pro 5x',
+  promax: 'Pro 20x',
+  pro: 'Pro 20x',
+  team: 'Team',
+  self_serve_business_usage_based: 'Business',
+  business: 'Business',
+  enterprise_cbp_usage_based: 'Enterprise',
+  enterprise: 'Enterprise',
+  edu: '教育版',
+  unknown: '未知',
+}
+
+/**
+ * Map one raw OpenAI `plan_type` to its user-facing plan name (Plus, Pro 5x,
+ * Pro 20x, Business…). Unrecognized identifiers pass through unchanged so new
+ * backend tiers stay visible instead of being masked.
+ */
+export function formatCodexPlanName(planType: string, locale: string): string {
+  const trimmed = planType.trim()
+  const names = locale.toLowerCase().startsWith('zh') ? PLAN_NAMES_ZH : PLAN_NAMES_EN
+  return names[trimmed.toLowerCase()] ?? trimmed
+}

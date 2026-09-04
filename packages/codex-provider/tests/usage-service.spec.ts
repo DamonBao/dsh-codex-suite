@@ -37,6 +37,7 @@ describe('CodexUsageService', () => {
         },
       },
       credits: { has_credits: true, unlimited: false, balance: '820.69' },
+      rate_limit_reset_credits: { available_count: 2 },
     }), { status: 200, headers: { 'content-type': 'application/json' } }))
     const service = new CodexUsageService({
       getAuth: vi.fn(async () => ({ auth: { apiKey: 'fresh-access-token' }, source: 'OAuth' })),
@@ -54,6 +55,7 @@ describe('CodexUsageService', () => {
         limitWindowSeconds: 604_800,
       },
       credits: { hasCredits: true, unlimited: false, balance: 820.69 },
+      resetCreditsAvailable: 2,
     })
     expect(JSON.stringify(usage)).not.toContain('token')
     expect(fetcher).toHaveBeenCalledOnce()
@@ -85,7 +87,27 @@ describe('CodexUsageService', () => {
       primary: null,
       secondary: null,
       credits: { hasCredits: false, unlimited: false, balance: null },
+      resetCreditsAvailable: null,
     })
+  })
+
+  it('treats malformed banked-reset summaries as unknown instead of failing the panel', () => {
+    expect(parseCodexUsagePayload({
+      plan_type: 'pro',
+      rate_limit_reset_credits: { available_count: 'not-a-number' },
+    }, 7).resetCreditsAvailable).toBeNull()
+    expect(parseCodexUsagePayload({
+      plan_type: 'pro',
+      rate_limit_reset_credits: { available_count: -1 },
+    }, 7).resetCreditsAvailable).toBeNull()
+    expect(parseCodexUsagePayload({
+      plan_type: 'pro',
+      rate_limit_reset_credits: null,
+    }, 7).resetCreditsAvailable).toBeNull()
+    expect(parseCodexUsagePayload({
+      plan_type: 'pro',
+      rate_limit_reset_credits: { available_count: 0 },
+    }, 7).resetCreditsAvailable).toBe(0)
   })
 
   it('rejects malformed payloads rather than forwarding arbitrary fields', () => {

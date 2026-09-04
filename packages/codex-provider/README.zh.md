@@ -27,9 +27,19 @@
 
 从 ChatGPT 账号级接口（`chatgpt.com/backend-api/wham/usage`）获取并在设置页渲染：
 
-- 套餐类型与 Credits（余额或「无限」）。
+- 套餐与 Credits（余额或「无限」）。套餐以对外名称显示：`plus` → Plus、`prolite` → Pro 5x、`promax` / `pro` → Pro 20x、`free` → 免费版、`team` / `business` / `enterprise` / `edu` 同理；未识别的标识原样透传，不会遮蔽新档位。
 - **主 / 次限额窗口**的用量百分比进度条和本地化重置时间。
 - 「已达限额」提示；连接状态下每 60 秒自动刷新，另有手动刷新按钮。
+
+### 重置次数（额度银行）
+
+OpenAI 会向符合条件的账号发放一次性的 **banked rate-limit reset（重置次数）**（如发布活动、邀请奖励），可随时兑换以恢复 5 小时与每周限额窗口：
+
+- 用量面板直接显示**可用重置次数**（随 60 秒自动刷新），接口未上报该字段时自动隐藏；有可用重置时，同一行还会显示**最早到期时间**（有重置时自动静默拉取明细，失败则退回只显示次数）。
+- 点击**重置用量限制**只会打开确认弹窗，不会直接兑换：弹窗按过期时间从早到晚列出每次重置的标题与有效期，并明示「兑换不可撤销」，需再点击**确认重置**才执行。
+- 确认后 Host 以全新幂等键调用兑换接口（`wham/rate-limit-reset-credits/consume`），**单次请求、不自动重试**——网络失败不会多扣次数。
+- 兑换结果按 OpenAI 的四种结果码本地化展示（已重置 / 此前已完成 / 无可重置周期 / 无可用次数），成功后自动静默刷新用量与剩余次数。
+- 仅在 Web UI 从 loopback 访问时可操作，与其他账号操作一致。
 
 ### 代理感知网络
 
@@ -70,7 +80,7 @@ dsh web
 2. 在登录弹窗中选择**浏览器登录**（远程机器可选**设备码登录**），完成 ChatGPT 授权。进度实时可见，随时可取消。
 3. 连接成功后，在常规模型选择器中挑选 `openai-codex` 模型即可开始对话。
 
-同一设置页在连接后还会显示用量面板和代理模式控件。账号操作（连接/断开/代理）仅在 Web UI 从 loopback 访问时可用。
+同一设置页在连接后还会显示用量面板（含可用重置次数）和代理模式控件；有可用重置时可在弹窗中确认兑换。账号操作（连接/断开/重置/代理）仅在 Web UI 从 loopback 访问时可用。
 
 ## 配置
 
@@ -103,10 +113,10 @@ Overlay 示例：
 
 本包由两半组成：
 
-- **Host 半**（`src/`，从包根导出）—— Cordis 插件，注入 `llm`、`credentials`、`settings`。它掌管 OAuth 生命周期（`CodexAuthService`）、令牌刷新（`CodexTokenRefresher`）、网络管理器、用量服务，并通过 `PiAiAdapter`（底层为 `@earendil-works/pi-ai` 的 `openaiCodexProvider`）注册 Provider。模型目录在加载时校验（上下文窗口 / max tokens 必须可用于上下文预算与压缩）。
+- **Host 半**（`src/`，从包根导出）—— Cordis 插件，注入 `llm`、`credentials`、`settings`。它掌管 OAuth 生命周期（`CodexAuthService`）、令牌刷新（`CodexTokenRefresher`）、网络管理器、用量服务与重置次数服务（`CodexResetService`），并通过 `PiAiAdapter`（底层为 `@earendil-works/pi-ai` 的 `openaiCodexProvider`）注册 Provider。模型目录在加载时校验（上下文窗口 / max tokens 必须可用于上下文预算与压缩）。
 - **Web 半**（`src/client/`，打包为 `lib/client.cjs`，经 `dsh.client` manifest 发现）—— 注册进 Web UI 设置页的 React 设置分区，提供中英文界面。
 
-两半之间通过一条**仅限 loopback 权限的 RPC 通道**通信（`status`、`network`、`setProxyMode`、`usage`、`login`、`cancel`、`logout`）。跨越该边界的失败原因是枚举值，而非错误文本。
+两半之间通过一条**仅限 loopback 权限的 RPC 通道**通信（`status`、`network`、`setProxyMode`、`usage`、`reset-credits`、`reset-credits/consume`、`login`、`cancel`、`logout`）。跨越该边界的失败原因是枚举值，而非错误文本。
 
 ## 开发
 
@@ -117,7 +127,7 @@ pnpm --filter @jcy2387/dsh-codex-provider test
 pnpm --filter @jcy2387/dsh-codex-provider build
 ```
 
-十个 vitest 套件覆盖：认证状态机与失败归类、IPv6 回调桥、终态与瞬时刷新失败的区分、代理探测（macOS / Windows / Linux / 环境变量）、用量解析与脱敏、设置卡片控制器和 RPC 契约。
+十一个 vitest 套件覆盖：认证状态机与失败归类、IPv6 回调桥、终态与瞬时刷新失败的区分、代理探测（macOS / Windows / Linux / 环境变量）、用量解析与脱敏、重置次数的查询/兑换/幂等键、设置卡片控制器和 RPC 契约。
 
 工作区级命令见 [Monorepo README](../../README.zh.md)。
 

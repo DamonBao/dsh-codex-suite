@@ -9,6 +9,9 @@ import type {
   CodexNetworkRoute,
   CodexNetworkState,
   CodexProxyMode,
+  CodexResetCredit,
+  CodexResetCreditsSnapshot,
+  CodexResetRedeemOutcome,
   CodexUsageCredits,
   CodexUsageSnapshot,
   CodexUsageWindow,
@@ -26,6 +29,8 @@ export interface CodexAuthRpcClient {
   network(signal?: AbortSignal): Promise<RpcResult<CodexNetworkState>>
   setProxyMode(mode: CodexProxyMode, signal?: AbortSignal): Promise<RpcResult<CodexNetworkState>>
   usage(signal?: AbortSignal): Promise<RpcResult<CodexUsageSnapshot | null>>
+  resetCredits(signal?: AbortSignal): Promise<RpcResult<CodexResetCreditsSnapshot | null>>
+  redeemResetCredit(creditId: string | null, signal?: AbortSignal): Promise<RpcResult<CodexResetRedeemOutcome | null>>
   login(method: CodexLoginMethod, signal?: AbortSignal): Promise<RpcResult<CodexAuthState>>
   cancel(signal?: AbortSignal): Promise<RpcResult<CodexAuthState>>
   logout(signal?: AbortSignal): Promise<RpcResult<CodexAuthState>>
@@ -70,11 +75,30 @@ export function createCodexAuthRpcClient(rpc: CodexAuthConnectionRpc): CodexAuth
     const usage = parseCodexUsageSnapshot(result.value)
     return usage === undefined ? invalidResponse('usage') : { ok: true, value: usage }
   }
+  const callResetCredits = async (signal?: AbortSignal): Promise<RpcResult<CodexResetCreditsSnapshot | null>> => {
+    const result = await rpc.call(CODEX_AUTH_RPC_CHANNEL, 'reset-credits', {}, signal)
+    if (!result.ok) return result
+    if (result.value === null) return { ok: true, value: null }
+    const credits = parseCodexResetCreditsSnapshot(result.value)
+    return credits === undefined ? invalidResponse('reset-credits') : { ok: true, value: credits }
+  }
+  const callRedeemResetCredit = async (
+    creditId: string | null,
+    signal?: AbortSignal,
+  ): Promise<RpcResult<CodexResetRedeemOutcome | null>> => {
+    const result = await rpc.call(CODEX_AUTH_RPC_CHANNEL, 'reset-credits/consume', { creditId }, signal)
+    if (!result.ok) return result
+    if (result.value === null) return { ok: true, value: null }
+    const outcome = parseCodexResetRedeemOutcome(result.value)
+    return outcome === undefined ? invalidResponse('reset-credits/consume') : { ok: true, value: outcome }
+  }
   return {
     status: signal => callAuth('status', {}, signal),
     network: signal => callNetwork('network', {}, signal),
     setProxyMode: (mode, signal) => callNetwork('proxy-mode', { mode }, signal),
     usage: callUsage,
+    resetCredits: callResetCredits,
+    redeemResetCredit: callRedeemResetCredit,
     login: (method, signal) => callAuth('login', { method }, signal),
     cancel: signal => callAuth('cancel', {}, signal),
     logout: signal => callAuth('logout', {}, signal),
@@ -140,6 +164,9 @@ export function parseCodexUsageSnapshot(value: unknown): CodexUsageSnapshot | un
   const credits = parseUsageCredits(value.credits)
   if (primary === undefined || secondary === undefined || credits === undefined) return undefined
   if (primary === null && secondary === null && value.planType === null && credits === null) return undefined
+  const resetCreditsAvailable = value.resetCreditsAvailable
+  if (resetCreditsAvailable !== undefined && resetCreditsAvailable !== null
+    && (!isFiniteNumber(resetCreditsAvailable) || resetCreditsAvailable < 0)) return undefined
   return {
     fetchedAt: value.fetchedAt,
     planType: value.planType,
@@ -147,6 +174,68 @@ export function parseCodexUsageSnapshot(value: unknown): CodexUsageSnapshot | un
     primary,
     secondary,
     credits,
+    resetCreditsAvailable: resetCreditsAvailable ?? null,
+  }
+}
+
+/** Validate one secret-free banked-reset listing returned by the Host. */
+export function parseCodexResetCreditsSnapshot(value: unknown): CodexResetCreditsSnapshot | undefined {
+  if (!isRecord(value)
+    || !isFiniteNumber(value.fetchedAt)
+    || !isFiniteNumber(value.availableCount)
+    || value.availableCount < 0
+    || !Array.isArray(value.credits)) return undefined
+  const credits: CodexResetCredit[] = []
+  for (const entry of value.credits) {
+    const credit = parseResetCredit(entry)
+    if (credit === undefined) return undefined
+    credits.push(credit)
+  }
+  return { fetchedAt: value.fetchedAt, availableCount: value.availableCount, credits }
+}
+
+function parseResetCredit(value: unknown): CodexResetCredit | undefined {
+  if (value === null) return undefined
+  if (!isRecord(value)
+    || typeof value.id !== 'string'
+    || value.id.length === 0
+    || typeof value.status !== 'string'
+    || value.status.length === 0) return undefined
+  const resetType = value.resetType ?? null
+  const title = value.title ?? null
+  const description = value.description ?? null
+  const grantedAt = value.grantedAt ?? null
+  const expiresAt = value.expiresAt ?? null
+  if ((resetType !== null && typeof resetType !== 'string')
+    || (title !== null && typeof title !== 'string')
+    || (description !== null && typeof description !== 'string')
+    || !isNullableNonNegativeNumber(grantedAt)
+    || !isNullableNonNegativeNumber(expiresAt)) return undefined
+  return {
+    id: value.id,
+    status: value.status,
+    resetType,
+    title,
+    description,
+    grantedAt,
+    expiresAt,
+  }
+}
+
+/** Validate one secret-free redemption outcome returned by the Host. */
+export function parseCodexResetRedeemOutcome(value: unknown): CodexResetRedeemOutcome | undefined {
+  if (!isRecord(value)) return undefined
+  switch (value.outcome) {
+    case 'reset':
+    case 'already-redeemed': {
+      const windowsReset = value.windowsReset ?? null
+      return isNullableNonNegativeNumber(windowsReset)
+        ? { outcome: value.outcome, windowsReset }
+        : undefined
+    }
+    case 'nothing-to-reset': return { outcome: 'nothing-to-reset' }
+    case 'no-credit': return { outcome: 'no-credit' }
+    default: return undefined
   }
 }
 
@@ -184,6 +273,10 @@ function isFiniteNumber(value: unknown): value is number {
 
 function isNullablePositiveNumber(value: unknown): value is number | null {
   return value === null || (isFiniteNumber(value) && value > 0)
+}
+
+function isNullableNonNegativeNumber(value: unknown): value is number | null {
+  return value === null || (isFiniteNumber(value) && value >= 0)
 }
 
 function invalidResponse(endpoint: string): RpcResult<never> {

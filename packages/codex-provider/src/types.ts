@@ -59,6 +59,36 @@ export interface CodexUsageWindow {
   limitWindowSeconds: number | null
 }
 
+/**
+ * One banked rate-limit reset credit ("reset") granted to the account.
+ * A redemption restores eligible subscription rate-limit windows; it is
+ * separate from the scheduled window resets above. Epoch timestamps use
+ * milliseconds; `null` means the backend did not report the value.
+ */
+export interface CodexResetCredit {
+  id: string
+  status: string
+  resetType: string | null
+  title: string | null
+  description: string | null
+  grantedAt: number | null
+  expiresAt: number | null
+}
+
+/** Browser-safe listing of banked resets; `availableCount` is authoritative. */
+export interface CodexResetCreditsSnapshot {
+  fetchedAt: number
+  availableCount: number
+  credits: readonly CodexResetCredit[]
+}
+
+/** Secret-free outcome of one banked-reset redemption. */
+export type CodexResetRedeemOutcome =
+  | { outcome: 'reset'; windowsReset: number | null }
+  | { outcome: 'already-redeemed'; windowsReset: number | null }
+  | { outcome: 'nothing-to-reset' }
+  | { outcome: 'no-credit' }
+
 /** Optional purchased-credit balance returned by the Codex usage service. */
 export interface CodexUsageCredits {
   hasCredits: boolean
@@ -74,4 +104,6 @@ export interface CodexUsageSnapshot {
   primary: CodexUsageWindow | null
   secondary: CodexUsageWindow | null
   credits: CodexUsageCredits | null
+  /** Available banked resets, or null when the account endpoint did not report them. */
+  resetCreditsAvailable: number | null
 }

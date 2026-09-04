@@ -28,7 +28,8 @@ The two plugins are fully decoupled: the Conversation UI works with any model, a
 - **ChatGPT OAuth, both flows.** Browser-based login with device-code fallback. Login failures are classified into secret-free, localized reasons (region restrictions, callback port conflicts, token exchange errors, network issues…) instead of raw stack traces.
 - **IPv6 loopback callback bridge.** pi-ai's OAuth listener only binds IPv4; on IPv6-preferred hosts the suite transparently relays the loopback callback, so login still works.
 - **Proactive token refresh.** Access tokens rotate ~5 minutes before expiry with retry backoff; a dead refresh token is detected precisely and surfaces as *reconnect required* instead of failing mid-stream.
-- **Usage dashboard.** Plan type, credits, and primary/secondary rate-limit windows with used-percent bars and reset times, fetched from the account-scoped ChatGPT endpoint.
+- **Usage dashboard.** Plan (shown under its user-facing name such as Plus, Pro 5x, or Pro 20x), credits, and primary/secondary rate-limit windows with used-percent bars and reset times, fetched from the account-scoped ChatGPT endpoint.
+- **Banked rate-limit resets.** View how many resets the account has banked and their earliest expiry, then redeem one from a confirmation dialog to restore the 5-hour and weekly limit windows.
 - **Proxy-aware networking.** Auto-detects environment and system proxies (macOS / Windows / Linux), routes only OpenAI traffic through them, keeps loopback direct, and exposes an explicit proxy mode (auto / environment / off).
 - **Reliability-first defaults.** SSE transport by default (no partial-output duplication on WebSocket failure), 5-minute stream idle timeout, configurable retry policy.
 - **Native Settings page** at *Settings → OpenAI Codex* with zh/en localization, live status, and a loopback-only RPC boundary — credentials never leave the Host.
@@ -118,7 +119,7 @@ To temporarily disable the Conversation UI without uninstalling it, apply the bu
 
 | Location | Controls |
 | --- | --- |
-| Settings → OpenAI Codex | Connect/disconnect account, login method, usage dashboard, proxy mode. |
+| Settings → OpenAI Codex | Connect/disconnect account, login method, usage dashboard, banked-reset view and redemption, proxy mode. |
 | Settings → Plugins → Plugin configuration | Auto-expand thinking (live), plugin version, one-click update for npm installs. |
 
 ## Architecture
@@ -151,7 +152,7 @@ pnpm --filter @jcy2387/dsh-conversation-ui build
 pnpm --dir packages/all pack --dry-run
 ```
 
-Tests run on [vitest](https://vitest.dev) — 14 suites covering the OAuth state machine, token refresh, network/proxy detection, usage parsing, the settings controllers, and the streaming client views. Client tests resolve the installed published DSH packages (a small module-table stand-in instantiates the shipped browser factory bundles). CI verifies release tags match all three package versions and audits the published tarball contents, then runs a consumer smoke test that installs the packed tarballs into a scratch project (resolving the published peer ranges against the real registry) and imports every Node-side entry point.
+Tests run on [vitest](https://vitest.dev) — 15 suites covering the OAuth state machine, token refresh, network/proxy detection, usage and banked-reset parsing, the settings controllers, and the streaming client views. Client tests resolve the installed published DSH packages (a small module-table stand-in instantiates the shipped browser factory bundles). CI verifies release tags match all three package versions and audits the published tarball contents, then runs a consumer smoke test that installs the packed tarballs into a scratch project (resolving the published peer ranges against the real registry) and imports every Node-side entry point.
 
 ### Release
 
@@ -180,9 +181,9 @@ Then create and publish a GitHub Release for that tag. Dependabot checks GitHub 
 .
 ├─ packages/
 │  ├─ codex-provider/     # @jcy2387/dsh-codex-provider
-│  │  ├─ src/             # Host half: OAuth, refresh, network, usage, LLM adapter
+│  │  ├─ src/             # Host half: OAuth, refresh, network, usage, banked resets, LLM adapter
 │  │  ├─ src/client/      # Web half: Settings section UI
-│  │  ├─ tests/           # 11 vitest suites
+│  │  ├─ tests/           # 12 vitest suites
 │  │  └─ cordis.patch.yml
 │  ├─ conversation-ui/    # @jcy2387/dsh-conversation-ui
 │  │  ├─ src/             # Host half: config bridge, settings RPC
