@@ -47,7 +47,7 @@
 
 ## 安装
 
-前置条件：装有 `web` profile 的 DeepSeek Harness（`dsh`）、Node.js `^22.19 || >=24`、pnpm 11。
+前置条件：DeepSeek Harness（`dsh`）`>=0.1.5-alpha.1 <0.2.0`（装有 `web` profile）、Node.js `^22.19 || >=24`、pnpm 11。
 
 **安装整套 Suite（推荐）：**
 

@@ -47,7 +47,7 @@ The two plugins are fully decoupled: the Conversation UI works with any model, a
 
 ## Installation
 
-Prerequisites: DeepSeek Harness (`dsh`) with the `web` profile, Node.js `^22.19 || >=24`, pnpm 11.
+Prerequisites: DeepSeek Harness (`dsh`) `>=0.1.5-alpha.1 <0.2.0` with the `web` profile, Node.js `^22.19 || >=24`, pnpm 11.
 
 **Install the whole suite (recommended):**
 
