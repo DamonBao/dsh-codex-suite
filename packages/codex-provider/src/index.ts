@@ -26,6 +26,7 @@ import type {} from '@deepseek-ai/dsh-settings'
 import { MAX_TIMER_DELAY_MS } from '@deepseek-ai/dsh-timeout'
 import { CodexAuthService, codexAuthModels } from './auth-service.ts'
 import { startCodexIpv6CallbackBridge } from './callback-bridge.ts'
+import { mountRpcChannel } from './channel-bridge.ts'
 import { CODEX_PROVIDER, CodexCredentialStore } from './credential-store.ts'
 import { CodexNetworkManager } from './network.ts'
 import { codexDispatchProvider } from './provider.ts'
@@ -310,15 +311,15 @@ export function apply(ctx: Context, config: Config): void {
   )
   // Arm proactive refresh from a credential stored before this Host started.
   void refresher.start()
-  ctx.inject(['connection'], (connectionCtx) => {
-    connectionCtx.effect(
-      () => connectionCtx.connection.rpc.handle(
-        CODEX_AUTH_RPC_CHANNEL,
-        (_endpoint, _payload) => handleCodexAuthRpc(rpcService, _endpoint, _payload),
-      ),
-      '@jcy2387/dsh-codex-provider: account RPC',
-    )
-  })
+  // dsh 0.1.5: the connection Host registry no longer mounts dedicated channel
+  // routes for external callers, so the plugin serves its own prefix route with
+  // the identical trust fence and wire envelope (see channel-bridge.ts).
+  mountRpcChannel(
+    ctx,
+    CODEX_AUTH_RPC_CHANNEL,
+    (endpoint, payload) => handleCodexAuthRpc(rpcService, endpoint, payload),
+    '@jcy2387/dsh-codex-provider: account RPC',
+  )
 }
 
 /**

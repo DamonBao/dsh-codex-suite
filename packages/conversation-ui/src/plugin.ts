@@ -2,6 +2,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/dsh-host-webserver'
 import type { ConnectionRpcHandler } from '@deepseek-ai/dsh-client-connection'
 import Schema from '@deepseek-ai/schemastery'
+import { mountRpcChannel } from './channel-bridge.ts'
 import { DEFAULT_CONVERSATION_CONFIG, type ConversationConfig } from './config.ts'
 import { injectConversationConfig } from './boot-config.ts'
 import { CONVERSATION_PACKAGE_NAME, CONVERSATION_PACKAGE_VERSION } from './package-meta.ts'
@@ -72,82 +73,85 @@ export function apply(ctx: Context, config: Config): void {
       ConversationSettingsSchema,
       { applies: 'live' },
     )
-    settingsCtx.inject(['connection'], (connectionCtx) => {
-      let upgrade: Promise<void> | undefined
+    let upgrade: Promise<void> | undefined
 
-      const view = (): ConversationSettingsView => {
-        const installation = inspectProfileInstallation(connectionCtx.baseUrl, CONVERSATION_PACKAGE_NAME)
-        return {
-          version: CONVERSATION_PACKAGE_VERSION,
-          installation: installation.kind,
-          writable: settingsCtx.settings.writable,
-          thinkAutoExpand: scope.get().thinkAutoExpand,
-          canUpgrade: installation.kind === 'npm',
-        }
+    const view = (): ConversationSettingsView => {
+      const installation = inspectProfileInstallation(settingsCtx.baseUrl, CONVERSATION_PACKAGE_NAME)
+      return {
+        version: CONVERSATION_PACKAGE_VERSION,
+        installation: installation.kind,
+        writable: settingsCtx.settings.writable,
+        thinkAutoExpand: scope.get().thinkAutoExpand,
+        canUpgrade: installation.kind === 'npm',
       }
+    }
 
-      const handle: ConnectionRpcHandler = async (endpoint, payload) => {
-        if (endpoint === CONVERSATION_SETTINGS_RPC.read) return { ok: true, value: view() }
-        if (endpoint === CONVERSATION_SETTINGS_RPC.write) {
-          if (typeof payload !== 'object' || payload === null
-            || typeof (payload as { thinkAutoExpand?: unknown }).thinkAutoExpand !== 'boolean') {
-            return {
-              ok: false,
-              error: {
-                code: 'settings-rejected',
-                message: 'thinkAutoExpand must be a boolean',
-                details: { ns: CONVERSATION_SETTINGS_NS },
-              },
-            }
+    const handle: ConnectionRpcHandler = async (endpoint, payload) => {
+      if (endpoint === CONVERSATION_SETTINGS_RPC.read) return { ok: true, value: view() }
+      if (endpoint === CONVERSATION_SETTINGS_RPC.write) {
+        if (typeof payload !== 'object' || payload === null
+          || typeof (payload as { thinkAutoExpand?: unknown }).thinkAutoExpand !== 'boolean') {
+          return {
+            ok: false,
+            error: {
+              code: 'settings-rejected',
+              message: 'thinkAutoExpand must be a boolean',
+              details: { ns: CONVERSATION_SETTINGS_NS },
+            },
           }
-          if (!connectionCtx.settings.writable) {
-            return {
-              ok: false,
-              error: {
-                code: 'settings-rejected',
-                message: 'conversation-ui settings are read-only',
-                details: { ns: CONVERSATION_SETTINGS_NS },
-              },
-            }
-          }
-          try {
-            await scope.update({ thinkAutoExpand: (payload as { thinkAutoExpand: boolean }).thinkAutoExpand })
-          } catch {
-            return {
-              ok: false,
-              error: {
-                code: 'settings-rejected',
-                message: 'conversation-ui settings update failed',
-                details: { ns: CONVERSATION_SETTINGS_NS },
-              },
-            }
-          }
-          return { ok: true, value: view() }
         }
-        if (endpoint === CONVERSATION_SETTINGS_RPC.upgrade) {
-          const installation = inspectProfileInstallation(connectionCtx.baseUrl, CONVERSATION_PACKAGE_NAME)
-          if (installation.kind !== 'npm') {
-            return { ok: false, error: { code: 'internal', message: 'conversation-ui is not an npm profile dependency', details: {} } }
+        if (!settingsCtx.settings.writable) {
+          return {
+            ok: false,
+            error: {
+              code: 'settings-rejected',
+              message: 'conversation-ui settings are read-only',
+              details: { ns: CONVERSATION_SETTINGS_NS },
+            },
           }
-          if (upgrade !== undefined) {
-            return { ok: false, error: { code: 'internal', message: 'conversation-ui update is already running', details: {} } }
-          }
-          upgrade = updateNpmProfilePackage(installation.profileDir, CONVERSATION_PACKAGE_NAME)
-          try {
-            await upgrade
-          } catch {
-            return { ok: false, error: { code: 'internal', message: 'conversation-ui update failed', details: {} } }
-          } finally {
-            upgrade = undefined
-          }
-          return { ok: true, value: { restartRequired: true } }
         }
-        return { ok: false, error: { code: 'internal', message: `unknown conversation-ui endpoint ${JSON.stringify(endpoint)}`, details: {} } }
+        try {
+          await scope.update({ thinkAutoExpand: (payload as { thinkAutoExpand: boolean }).thinkAutoExpand })
+        } catch {
+          return {
+            ok: false,
+            error: {
+              code: 'settings-rejected',
+              message: 'conversation-ui settings update failed',
+              details: { ns: CONVERSATION_SETTINGS_NS },
+            },
+          }
+        }
+        return { ok: true, value: view() }
       }
-      connectionCtx.effect(
-        () => connectionCtx.connection.rpc.handle(CONVERSATION_SETTINGS_RPC_CHANNEL, handle),
-        'dsh-conversation-ui: settings RPC',
-      )
-    })
+      if (endpoint === CONVERSATION_SETTINGS_RPC.upgrade) {
+        const installation = inspectProfileInstallation(settingsCtx.baseUrl, CONVERSATION_PACKAGE_NAME)
+        if (installation.kind !== 'npm') {
+          return { ok: false, error: { code: 'internal', message: 'conversation-ui is not an npm profile dependency', details: {} } }
+        }
+        if (upgrade !== undefined) {
+          return { ok: false, error: { code: 'internal', message: 'conversation-ui update is already running', details: {} } }
+        }
+        upgrade = updateNpmProfilePackage(installation.profileDir, CONVERSATION_PACKAGE_NAME)
+        try {
+          await upgrade
+        } catch {
+          return { ok: false, error: { code: 'internal', message: 'conversation-ui update failed', details: {} } }
+        } finally {
+          upgrade = undefined
+        }
+        return { ok: true, value: { restartRequired: true } }
+      }
+      return { ok: false, error: { code: 'internal', message: `unknown conversation-ui endpoint ${JSON.stringify(endpoint)}`, details: {} } }
+    }
+    // dsh 0.1.5: the connection Host registry no longer mounts dedicated
+    // channel routes for external callers, so the plugin serves its own prefix
+    // route with the identical trust fence and wire envelope (channel-bridge).
+    mountRpcChannel(
+      settingsCtx,
+      CONVERSATION_SETTINGS_RPC_CHANNEL,
+      handle,
+      'dsh-conversation-ui: settings RPC',
+    )
   })
 }

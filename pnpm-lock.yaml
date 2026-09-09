@@ -61,6 +61,9 @@ importers:
       '@deepseek-ai/dsh-credentials':
         specifier: 0.1.5-alpha.1
         version: 0.1.5-alpha.1(@deepseek-ai/cordis@4.0.2)(@deepseek-ai/dsh-invariants@0.1.5-alpha.1(@deepseek-ai/cordis@4.0.2))
+      '@deepseek-ai/dsh-host-webserver':
+        specifier: 0.1.5-alpha.1
+        version: 0.1.5-alpha.1(@deepseek-ai/cordis@4.0.2)
       '@deepseek-ai/dsh-launch-environment':
         specifier: 0.1.5-alpha.1
         version: 0.1.5-alpha.1(@deepseek-ai/cordis@4.0.2)
