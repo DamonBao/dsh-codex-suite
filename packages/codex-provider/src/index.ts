@@ -236,6 +236,10 @@ export function apply(ctx: Context, config: Config): void {
     provider: CODEX_PROVIDER,
     displayName: piProvider.name,
     piProvider: codexDispatchProvider(piProvider),
+    // The catalog is materialized from pi-ai's own Codex provider and asserted
+    // serviceable above, so no model carries a deferred diagnostic; dsh
+    // >=0.1.5-alpha.2 requires the map to exist and reads it per request.
+    modelErrors: new Map(),
     configuredMaxTokens: new Map(),
     streamIdleTimeoutMs: resolved.streamIdleTimeoutMs,
     maxRequestImageBytes: DEFAULT_MAX_REQUEST_IMAGE_BYTES,
