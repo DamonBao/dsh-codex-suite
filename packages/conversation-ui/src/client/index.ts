@@ -1,10 +1,9 @@
 import { createElement, useSyncExternalStore, type ComponentType } from 'react'
 import type { Context as ClientContext } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/dsh-client-locale/client'
-// Type-only: the connection Context merge and the plugins section's SlotMap
-// entry ('settings.plugin.item').
+// Type-only declarations for Connection and bundle configuration slots.
 import type { ConnectionHandle } from '@deepseek-ai/dsh-client-connection/client'
-import type {} from '@deepseek-ai/dsh-client-ui-settings-plugins/client'
+import type {} from '@deepseek-ai/dsh-client-ui-plugin-manager/client'
 // Type-only: the SlotRegistry service merge (ctx.slots), the Chat SlotMap
 // entries ('conversation.chat.node' / 'conversation.chat.turnTail'), and the
 // uiConversation service merge.
@@ -18,8 +17,8 @@ import { wrapFollowNodeView, type FollowWrapProps } from './TypewriterToolNodeVi
 import { wrapTurnPreludeNodeView } from './TurnPreludeUserNodeView.tsx'
 import { ConversationCard } from './ConversationCard.tsx'
 import { ConversationCardController } from './conversation-ui-card-controller.ts'
-import { DeliverablesCard } from './DeliverablesCard.tsx'
-import { deliverablesDefinition, selectDeliverables } from './deliverables.ts'
+import { DeliverablesTail } from './DeliverablesCard.tsx'
+import { deliverablesDefinition } from './deliverables.ts'
 import { createConversationSettingsApi } from './conversation-ui-settings-api.ts'
 import { wrapTranscriptView } from './TranscriptViewBridge.tsx'
 import { NS as SETTINGS_NS, en, zh } from './locales.ts'
@@ -208,16 +207,13 @@ export function apply(ctx: ClientContext): void {
 
   ctx.slots.inject('conversation.view', () => wrapNativeChatView(ctx))
 
-  // The native deliverables package already publishes successful file paths,
-  // so the Codex card must register independently of our optional richer event
-  // accumulator. Keeping the slot inside the service injection left Web with
-  // only the built-in "产物" chips when that callback was not activated.
+  // Keep native file previews and change review alongside the plugin's deliveries.
   ctx.slots.inject('conversation.chat.turnTail', () => ctx.slots.register({
     name: 'conversation.chat.turnTail',
+    id: '@jcy2387/dsh-conversation-ui',
     priority: -100,
-    select: selectDeliverables,
     registrant: 'dsh-conversation-ui',
-  }, DeliverablesCard))
+  }, DeliverablesTail))
   ctx.inject(['uiConversation'], (deliverablesCtx) => {
     const events = deliverablesCtx.uiConversation.events
     return events.register(deliverablesDefinition)
@@ -236,12 +232,14 @@ export function apply(ctx: ClientContext): void {
     const detachPreference = preference.attach(card)
     card.start()
     settingsCtx.effect(() => settingsCtx.locale.register(SETTINGS_NS, { zh, en }), 'dsh-conversation-ui: settings dictionaries')
-    settingsCtx.slots.inject('settings.plugin.item', () => settingsCtx.slots.register({
-      name: 'settings.plugin.item',
-      key: 'conversation-ui',
-      locale: SETTINGS_NS,
-      inject: () => card.inject(),
-    }, ConversationCard))
+    for (const bundle of ['@jcy2387/dsh-conversation-ui', '@jcy2387/dsh-suite']) {
+      settingsCtx.slots.inject('plugins.bundle.config', () => settingsCtx.slots.register({
+        name: 'plugins.bundle.config',
+        key: bundle,
+        locale: SETTINGS_NS,
+        inject: () => card.inject(),
+      }, ConversationCard))
+    }
     return () => {
       card.stop()
       detachPreference()

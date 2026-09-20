@@ -1,5 +1,7 @@
 # @jcy2387/dsh-conversation-ui
 
+This release targets Harness `0.1.6-alpha.2`. The deliverables card uses an independent list entry alongside native file previews, change review, and other plugins’ Turn-tail contributions. Settings appear on the Suite or standalone bundle page. Harness `0.1.5` users should keep plugin version `0.1.5-rc.2`.
+
 [![CI](https://github.com/DamonBao/dsh-codex-suite/actions/workflows/ci.yml/badge.svg)](https://github.com/DamonBao/dsh-codex-suite/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
@@ -42,7 +44,7 @@ A Codex-style conversation UI enhancement plugin for DeepSeek Harness (DSH): the
 
 ### Plugin settings card
 
-- A durable **Auto-expand thinking** toggle in *Settings → Plugins → Plugin configuration* (live; no restart needed).
+- A durable **Auto-expand thinking** toggle in *Plugins → DSH Codex Suite (or Conversation UI)* (live; no restart needed).
 - The card also shows the current version and installation kind (npm / local development); npm installs get a one-click update action (restart required after updating).
 - Localized in Chinese and English.
 
@@ -51,7 +53,7 @@ A Codex-style conversation UI enhancement plugin for DeepSeek Harness (DSH): the
 Published package:
 
 ```sh
-dsh plugin --profile web add @jcy2387/dsh-conversation-ui
+dsh plugin --profile web add @jcy2387/dsh-conversation-ui@0.1.6-alpha.2
 dsh web
 ```
 
@@ -89,7 +91,7 @@ Overlay example:
     revealCharsPerSec: 60
 ```
 
-User preferences such as *Auto-expand thinking* do not go through the overlay: change them in **Settings → Plugins → Plugin configuration** — they apply immediately and persist across restarts.
+User preferences such as *Auto-expand thinking* do not go through the overlay: change them in **Plugins → DSH Codex Suite (or Conversation UI)** — they apply immediately and persist across restarts.
 
 ### Temporarily disable
 

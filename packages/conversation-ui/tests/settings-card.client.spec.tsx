@@ -2,7 +2,7 @@
 
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { cleanup, render, screen } from '@testing-library/react'
 import { Context } from '@deepseek-ai/cordis'
 import { SlotRegistry } from '@deepseek-ai/dsh-client-ui-renderer/client'
 import { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
@@ -73,12 +73,12 @@ async function bench(options: BenchOptions = {}): Promise<{
 function declareCardSlot(slots: SlotRegistry): () => void {
   return slots.register({
     name: 'root',
-    children: { 'settings.plugin.item': { kind: 'keyed', scope: 'root' } },
+    children: { 'plugins.bundle.config': { kind: 'keyed', scope: 'root' } },
   } as never, () => null)
 }
 
 function cardFace(slots: SlotRegistry): ConversationCardFace {
-  const entry = slots.entries('settings.plugin.item')[0]
+  const entry = slots.entries('plugins.bundle.config')[0]
   if (entry === undefined) throw new Error('conversation-ui card was not registered')
   return (entry.inject as unknown as () => ConversationCardFace)()
 }
@@ -86,6 +86,7 @@ function cardFace(slots: SlotRegistry): ConversationCardFace {
 function cardProps(face: ConversationCardFace): ConversationCardProps {
   return {
     ...face,
+    view: 'page',
     t: (key: keyof typeof en) => en[key],
     useConversationUiCard: (selector: (state: ReturnType<typeof face.hooks.conversationUiCard.getSnapshot>) => unknown) => (
       selector(face.hooks.conversationUiCard.getSnapshot())
@@ -107,13 +108,13 @@ describe('conversation-ui settings card', () => {
     expect(inject).toEqual(['slots'])
   })
 
-  it('registers the card once the plugin-item slot is declared', async () => {
+  it('registers configuration for standalone and suite bundle pages', async () => {
     const { ctx, slots } = await bench()
     declareCardSlot(slots)
     await ctx.plugin({ inject: [...inject], apply }).await()
 
-    expect(slots.entries('settings.plugin.item').map(entry => entry.options.key))
-      .toEqual(['conversation-ui'])
+    expect(slots.entries('plugins.bundle.config').map(entry => entry.options.key))
+      .toEqual(['@jcy2387/dsh-conversation-ui', '@jcy2387/dsh-suite'])
   })
 
   it('keeps the plugin entry visible when the core settings API filters third-party namespaces', async () => {
@@ -145,7 +146,6 @@ describe('conversation-ui settings card', () => {
     await vi.waitFor(() => expect(face.hooks.conversationUiCard.getSnapshot().status).toBe('ready'))
     render(<ConversationCard {...cardProps(face)} />)
 
-    fireEvent.click(screen.getByRole('button', { name: new RegExp(en.title, 'i') }))
     expect(screen.getByText('Development version 0.1.0')).toBeTruthy()
     expect(screen.getByRole('button', { name: en.update }).getAttribute('disabled')).not.toBeNull()
   })
@@ -208,8 +208,8 @@ describe('conversation-ui settings card', () => {
     declareCardSlot(slots)
 
     await vi.waitFor(() => {
-      expect(slots.entries('settings.plugin.item').map(entry => entry.options.key))
-        .toEqual(['conversation-ui'])
+      expect(slots.entries('plugins.bundle.config').map(entry => entry.options.key))
+        .toEqual(['@jcy2387/dsh-conversation-ui', '@jcy2387/dsh-suite'])
     })
   })
 })

@@ -7,7 +7,7 @@
 
 English | [简体中文](README.zh.md)
 
-A suite of [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) (DSH) plugins that brings **ChatGPT/OpenAI Codex models** and a **Codex-style conversation experience** to the DSH Web UI. Built against DSH `0.1.5-alpha.1` (peer range `>=0.1.5-alpha.1 <0.2.0`).
+A suite of [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) (DSH) plugins that brings **ChatGPT/OpenAI Codex models** and a **Codex-style conversation experience** to the DSH Web UI. Built against DSH `0.1.6-alpha.2` (peer range `>=0.1.6-alpha.2 <0.1.7-0`).
 
 The repository is a pnpm monorepo containing two independent runtime plugins and one pure bundle package:
 
@@ -47,20 +47,20 @@ The two plugins are fully decoupled: the Conversation UI works with any model, a
 
 ## Installation
 
-Prerequisites: DeepSeek Harness (`dsh`) `>=0.1.5-alpha.1 <0.2.0` with the `web` profile, Node.js `^22.19 || >=24`, pnpm 11.
+Prerequisites: DeepSeek Harness (`dsh`) `>=0.1.6-alpha.2 <0.1.7-0` with the `web` profile, Node.js `^22.19 || >=24`, pnpm 11.
 
 **Install the whole suite (recommended):**
 
 ```sh
-dsh plugin --profile web add @jcy2387/dsh-suite
+dsh plugin --profile web add @jcy2387/dsh-suite@0.1.6-alpha.2
 dsh web
 ```
 
 **Or install plugins individually:**
 
 ```sh
-dsh plugin --profile web add @jcy2387/dsh-codex-provider
-dsh plugin --profile web add @jcy2387/dsh-conversation-ui
+dsh plugin --profile web add @jcy2387/dsh-codex-provider@0.1.6-alpha.2
+dsh plugin --profile web add @jcy2387/dsh-conversation-ui@0.1.6-alpha.2
 dsh web
 ```
 
@@ -79,7 +79,7 @@ Install **either** the suite **or** the individual plugins in a given profile �
 1. Install the suite (see above) and open the Web UI (`dsh web`).
 2. Go to **Settings → OpenAI Codex**, click **Connect**, and choose **Browser login** (or **Device login** on a headless/remote machine). Complete the ChatGPT authorization.
 3. Back in the chat, pick an `openai-codex` model in the model selector and start talking.
-4. Optional: review the usage panel in the same settings page, and tune the conversation stream in **Settings → Plugins → Plugin configuration**.
+4. Optional: review the usage panel in the same settings page, and tune the conversation stream in **Plugins → DSH Codex Suite (or Conversation UI)**.
 
 ## Configuration
 
@@ -120,7 +120,7 @@ To temporarily disable the Conversation UI without uninstalling it, apply the bu
 | Location | Controls |
 | --- | --- |
 | Settings → OpenAI Codex | Connect/disconnect account, login method, usage dashboard, banked-reset view and redemption, proxy mode. |
-| Settings → Plugins → Plugin configuration | Auto-expand thinking (live), plugin version, one-click update for npm installs. |
+| Plugins → DSH Codex Suite (or Conversation UI) | Auto-expand thinking (live), plugin version, one-click update for npm installs. |
 
 ## Architecture
 

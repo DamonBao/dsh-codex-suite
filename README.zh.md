@@ -7,7 +7,7 @@
 
 [English](README.md) | 简体中文
 
-为 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)（DSH）打造的插件套件：把 **ChatGPT / OpenAI Codex 模型**和 **Codex 风格的对话体验**带进 DSH Web UI。基于 DSH `0.1.5-alpha.1` 构建（peer 范围 `>=0.1.5-alpha.1 <0.2.0`）。
+为 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)（DSH）打造的插件套件：把 **ChatGPT / OpenAI Codex 模型**和 **Codex 风格的对话体验**带进 DSH Web UI。基于 DSH `0.1.6-alpha.2` 构建（peer 范围 `>=0.1.6-alpha.2 <0.1.7-0`）。
 
 本仓库是 pnpm monorepo，包含两个相互独立的运行时插件和一个纯组合包：
 
@@ -47,20 +47,20 @@
 
 ## 安装
 
-前置条件：DeepSeek Harness（`dsh`）`>=0.1.5-alpha.1 <0.2.0`（装有 `web` profile）、Node.js `^22.19 || >=24`、pnpm 11。
+前置条件：DeepSeek Harness（`dsh`）`>=0.1.6-alpha.2 <0.1.7-0`（装有 `web` profile）、Node.js `^22.19 || >=24`、pnpm 11。
 
 **安装整套 Suite（推荐）：**
 
 ```sh
-dsh plugin --profile web add @jcy2387/dsh-suite
+dsh plugin --profile web add @jcy2387/dsh-suite@0.1.6-alpha.2
 dsh web
 ```
 
 **或单独安装插件：**
 
 ```sh
-dsh plugin --profile web add @jcy2387/dsh-codex-provider
-dsh plugin --profile web add @jcy2387/dsh-conversation-ui
+dsh plugin --profile web add @jcy2387/dsh-codex-provider@0.1.6-alpha.2
+dsh plugin --profile web add @jcy2387/dsh-conversation-ui@0.1.6-alpha.2
 dsh web
 ```
 
@@ -79,7 +79,7 @@ dsh web
 1. 安装套件（见上）并打开 Web UI（`dsh web`）。
 2. 进入 **设置 → OpenAI Codex**，点击**连接**，选择**浏览器登录**（无头/远程机器可用**设备码登录**），完成 ChatGPT 授权。
 3. 回到对话，在模型选择器中挑选 `openai-codex` 模型即可开聊。
-4. 可选：在同一设置页查看用量面板，并在 **设置 → 插件 → 插件配置** 中调节对话流参数。
+4. 可选：在同一设置页查看用量面板，并在 **插件 → DSH Codex Suite（或 Conversation UI）** 中调节对话流参数。
 
 ## 配置
 
@@ -120,7 +120,7 @@ dsh web
 | 位置 | 可控内容 |
 | --- | --- |
 | 设置 → OpenAI Codex | 连接/断开账号、登录方式、用量面板、重置次数查看与兑换、代理模式。 |
-| 设置 → 插件 → 插件配置 | 自动展开思考（实时生效）、插件版本、npm 安装一键更新。 |
+| 插件 → DSH Codex Suite（或 Conversation UI） | 自动展开思考（实时生效）、插件版本、npm 安装一键更新。 |
 
 ## 架构
 
