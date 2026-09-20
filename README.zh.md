@@ -52,15 +52,15 @@
 **安装整套 Suite（推荐）：**
 
 ```sh
-dsh plugin --profile web add @jcy2387/dsh-suite
+dsh plugin --profile web add @jcy2387/dsh-suite@0.1.6-alpha.2
 dsh web
 ```
 
 **或单独安装插件：**
 
 ```sh
-dsh plugin --profile web add @jcy2387/dsh-codex-provider
-dsh plugin --profile web add @jcy2387/dsh-conversation-ui
+dsh plugin --profile web add @jcy2387/dsh-codex-provider@0.1.6-alpha.2
+dsh plugin --profile web add @jcy2387/dsh-conversation-ui@0.1.6-alpha.2
 dsh web
 ```
 

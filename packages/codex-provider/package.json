@@ -2,7 +2,7 @@
   "name": "@jcy2387/dsh-codex-provider",
   "displayName": "OpenAI Codex Provider",
   "description": "OpenAI Codex OAuth provider and native settings UI for DeepSeek Harness",
-  "version": "0.1.5-rc.2",
+  "version": "0.1.6-alpha.2",
   "author": "jcy2387",
   "type": "module",
   "packageManager": "pnpm@11.7.0",

@@ -53,7 +53,7 @@ A Codex-style conversation UI enhancement plugin for DeepSeek Harness (DSH): the
 Published package:
 
 ```sh
-dsh plugin --profile web add @jcy2387/dsh-conversation-ui
+dsh plugin --profile web add @jcy2387/dsh-conversation-ui@0.1.6-alpha.2
 dsh web
 ```
 
