@@ -1,6 +1,8 @@
 import { act, cleanup, fireEvent, render, waitFor } from '@testing-library/react'
 import { Context } from '@deepseek-ai/cordis'
 import { ConversationEventRegistry } from '@deepseek-ai/dsh-client-ui-conversation/client'
+import type { PropsRenderSlots } from '@deepseek-ai/dsh-client-ui-slots'
+import type { TurnTailOwnerProps } from '@deepseek-ai/dsh-client-ui-chat/client'
 import { SlotRegistry } from '@deepseek-ai/dsh-client-ui-renderer/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createElement, memo, useState, type FunctionComponent } from 'react'
@@ -29,7 +31,7 @@ import {
   wrapFollowNodeView,
 } from '../src/client/TypewriterToolNodeView.tsx'
 import { wrapTurnPreludeNodeView } from '../src/client/TurnPreludeUserNodeView.tsx'
-import { DeliverablesCard } from '../src/client/DeliverablesCard.tsx'
+import { DeliverablesCard, DeliverablesTail } from '../src/client/DeliverablesCard.tsx'
 import { DELIVERABLES_DATA_KEY, deliverablesDefinition, selectDeliverables } from '../src/client/deliverables.ts'
 import { DEFAULT_CONVERSATION_CONFIG, CONVERSATION_BOOT_GLOBAL } from '../src/config.ts'
 import { Config } from '../src/plugin.ts'
@@ -737,6 +739,32 @@ describe('Codex-style deliverables', () => {
     ])
   })
 
+  it('renders list-slot owner props without a chain matched prop and hides empty Turns', () => {
+    const openFile = vi.fn()
+    const owner = {
+      turn: { turn: 1, data: { get: () => undefined } },
+      seq: 3,
+      openFile,
+    } as unknown as TurnTailOwnerProps
+    const view = render(<DeliverablesTail {...owner} />)
+    expect(view.container.childElementCount).toBe(0)
+
+    const entries = [
+      { path: 'visible.txt', seq: 2, added: 1, removed: 0, kind: 'file' },
+      { path: 'later.txt', seq: 4, added: 1, removed: 0, kind: 'file' },
+    ]
+    const withFiles = {
+      ...owner,
+      turn: { turn: 1, data: { get: (key: string) => key === DELIVERABLES_DATA_KEY ? { entries } : undefined } },
+    } as unknown as TurnTailOwnerProps
+    view.rerender(<DeliverablesTail {...withFiles} />)
+    expect(view.queryByTitle('later.txt')).toBeNull()
+    fireEvent.click(view.getByTitle('visible.txt'))
+    expect(openFile).toHaveBeenCalledWith('visible.txt')
+    view.rerender(<DeliverablesTail {...owner} />)
+    expect(view.container.childElementCount).toBe(0)
+  })
+
   it('renders expandable file rows and opens website deliverables externally', () => {
     const openFile = vi.fn()
     const open = vi.spyOn(window, 'open').mockImplementation(() => null)
@@ -823,27 +851,31 @@ describe('client plugin lifecycle', () => {
     expect(ctx.slots.entries('conversation.view')[0]?.component).toBe(NativeChatView)
   })
 
-  it('elects the Codex tail card before the built-in deliverables claimant', async () => {
+  it('adds deliveries alongside native file previews and leaves them on unload', async () => {
     function NativeProducedFiles() { return null }
     const ctx = new Context()
     await ctx.plugin(SlotRegistry).await()
     ctx.slots.register({
       name: 'root',
-      children: { 'conversation.chat.turnTail': { kind: 'chain', scope: 'session' } },
-    } as never, (() => null) as never)
+      children: { 'conversation.chat.turnTail': { kind: 'list', scope: 'session' } },
+    }, (_props: PropsRenderSlots<'conversation.chat.turnTail'>) => null)
     ctx.slots.register({
       name: 'conversation.chat.turnTail',
-      select: () => ['native.txt'],
+      id: '@deepseek-ai/dsh-client-ui-deliverables',
       registrant: 'native-deliverables',
-    } as never, NativeProducedFiles as never)
+    }, NativeProducedFiles)
     const fiber = ctx.plugin({ inject: [...inject], apply })
     await fiber.await()
 
     const entries = ctx.slots.entries('conversation.chat.turnTail')
     expect(entries).toHaveLength(2)
-    expect(entries[0]?.component).toBe(DeliverablesCard)
+    expect(entries[0]?.component).toBe(DeliverablesTail)
+    expect(entries[0]?.options.id).toBe('@jcy2387/dsh-conversation-ui')
+    expect(entries[0]?.select).toBeUndefined()
     expect(entries[0]?.options.priority).toBe(-100)
     expect(entries[1]?.component).toBe(NativeProducedFiles)
+    expect(ctx.slots.entriesOfSlot('conversation.chat.turnTail').map(entry => entry.component))
+      .toEqual([DeliverablesTail, NativeProducedFiles])
 
     await fiber.dispose()
     expect(ctx.slots.entries('conversation.chat.turnTail')).toHaveLength(1)
@@ -857,13 +889,13 @@ describe('client plugin lifecycle', () => {
     ctx.provide('uiConversation', { events } as never)
     ctx.slots.register({
       name: 'root',
-      children: { 'conversation.chat.turnTail': { kind: 'chain', scope: 'session' } },
-    } as never, (() => null) as never)
+      children: { 'conversation.chat.turnTail': { kind: 'list', scope: 'session' } },
+    }, (_props: PropsRenderSlots<'conversation.chat.turnTail'>) => null)
     const fiber = ctx.plugin({ inject: [...inject], apply })
     await fiber.await()
 
     expect(ctx.slots.entries('conversation.chat.turnTail')).toHaveLength(1)
-    expect(ctx.slots.entries('conversation.chat.turnTail')[0]?.component).toBe(DeliverablesCard)
+    expect(ctx.slots.entries('conversation.chat.turnTail')[0]?.component).toBe(DeliverablesTail)
     expect(events.entries().some(entry => entry.kind === DELIVERABLES_DATA_KEY)).toBe(true)
 
     await fiber.dispose()

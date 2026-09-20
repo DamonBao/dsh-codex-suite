@@ -6,7 +6,7 @@ import {
   IconGlobeOutline14,
   IconProjectAddOutline16,
 } from '@deepseek-ai/dsh-client-ui-primitives'
-import type { DeliverableEntry } from './deliverables.ts'
+import { selectDeliverables, type DeliverableEntry } from './deliverables.ts'
 import css from './DeliverablesCard.module.css'
 
 export interface DeliverablesCardProps extends TurnTailOwnerProps {
@@ -58,6 +58,12 @@ function collectEditStats(turn: number): ReadonlyMap<string, EditStats> {
     result.set(path, { added: Number(match[1]), removed: Number(match[2]) })
   }
   return result
+}
+
+/** Render this list contribution only when its Turn has delivered files or websites. */
+export function DeliverablesTail(props: TurnTailOwnerProps) {
+  const matched = selectDeliverables(props)
+  return matched === null ? null : <DeliverablesCard {...props} matched={matched} />
 }
 
 /** Codex-style turn-tail card for edited files and deployed websites. */

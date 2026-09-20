@@ -1,5 +1,4 @@
-/* Mirrors the shipped PluginCard chrome without importing an internal module
-   from another client package. */
+/* Configuration form within the installed bundle's page. */
 
 .card {
   list-style: none;
@@ -30,15 +29,9 @@
   border: 0;
   border-radius: 12px;
   background: none;
-  cursor: pointer;
   text-align: left;
   font: inherit;
   color: inherit;
-}
-
-.header:focus-visible {
-  outline: 2px solid var(--dsw-alias-brand-primary);
-  outline-offset: -2px;
 }
 
 .headText {
@@ -83,16 +76,6 @@
   font-weight: 500;
   line-height: 17px;
   white-space: nowrap;
-}
-
-.chevron {
-  flex: none;
-  color: var(--dsw-alias-label-tertiary);
-  transition: transform .16s;
-}
-
-.chevronOpen {
-  transform: rotate(180deg);
 }
 
 .body {

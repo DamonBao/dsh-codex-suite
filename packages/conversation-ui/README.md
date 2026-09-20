@@ -1,5 +1,7 @@
 # @jcy2387/dsh-conversation-ui
 
+本版本面向 Harness `0.1.6-alpha.2`。产物卡片使用新版列表插槽中的独立条目，与原生文件预览、变更审阅及其他插件的回合尾部内容共存；插件设置位于 Suite 或独立插件的配置页。`0.1.5` 用户应继续使用插件 `0.1.5-rc.2`。
+
 [![CI](https://github.com/DamonBao/dsh-codex-suite/actions/workflows/ci.yml/badge.svg)](https://github.com/DamonBao/dsh-codex-suite/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
@@ -42,7 +44,7 @@ DeepSeek Harness（DSH）的 Codex 风格对话界面增强插件：把 Web 对�
 
 ### 插件设置卡片
 
-- 在 **设置 → 插件 → 插件配置** 中提供持久化的「自动展开思考」开关（实时生效，无需重启）。
+- 在 **插件 → DSH Codex Suite（或 Conversation UI）** 中提供持久化的「自动展开思考」开关（实时生效，无需重启）。
 - 卡片同时显示当前版本与安装形态（npm / 本地开发），npm 安装支持一键更新（更新后需重启）。
 - 界面中英文本地化。
 
@@ -89,7 +91,7 @@ Overlay 示例：
     revealCharsPerSec: 60
 ```
 
-「自动展开思考」等用户偏好不走 overlay：在 **设置 → 插件 → 插件配置** 中修改，保存即生效并跨重启持久化。
+「自动展开思考」等用户偏好不走 overlay：在 **插件 → DSH Codex Suite（或 Conversation UI）** 中修改，保存即生效并跨重启持久化。
 
 ### 临时禁用
 
