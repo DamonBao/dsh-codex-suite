@@ -1,7 +1,7 @@
-/* Mirrors the shipped PluginCard chrome without importing an internal module
-   from another client package. */
+/* Configuration form within the installed bundle's page. */
 
 .card {
+  min-width: 0;
   list-style: none;
   display: flex;
   flex-direction: column;
@@ -21,24 +21,11 @@
 }
 
 .header {
-  appearance: none;
   display: flex;
-  align-items: center;
+  flex-wrap: wrap;
+  align-items: flex-start;
   gap: 12px;
-  width: 100%;
   padding: 14px 16px;
-  border: 0;
-  border-radius: 12px;
-  background: none;
-  cursor: pointer;
-  text-align: left;
-  font: inherit;
-  color: inherit;
-}
-
-.header:focus-visible {
-  outline: 2px solid var(--dsw-alias-brand-primary);
-  outline-offset: -2px;
 }
 
 .headText {
@@ -46,7 +33,8 @@
   flex-direction: column;
   gap: 4px;
   min-width: 0;
-  flex: 1;
+  flex: 1 1 16rem;
+  overflow-wrap: anywhere;
 }
 
 .name {
@@ -62,12 +50,19 @@
   color: var(--dsw-alias-label-tertiary);
 }
 
+.metadata {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+  max-width: 100%;
+}
+
 .version {
-  flex: none;
-  max-width: 16rem;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
   font-size: 12px;
   line-height: 1.5;
   color: var(--dsw-alias-label-tertiary);
@@ -83,16 +78,6 @@
   font-weight: 500;
   line-height: 17px;
   white-space: nowrap;
-}
-
-.chevron {
-  flex: none;
-  color: var(--dsw-alias-label-tertiary);
-  transition: transform .16s;
-}
-
-.chevronOpen {
-  transform: rotate(180deg);
 }
 
 .body {
