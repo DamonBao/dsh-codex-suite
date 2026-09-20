@@ -29,8 +29,12 @@ export function ConversationCard(props: ConversationCardProps) {
           <span className={css.name}>{t('title')}</span>
           <span className={css.description}>{t('description')}</span>
         </span>
-        {versionLabel === null ? null : <span className={css.version}>{versionLabel}</span>}
-        {state.dirty ? <span className={css.pending}>{t('unsaved')}</span> : null}
+        {versionLabel === null && !state.dirty ? null : (
+          <span className={css.metadata}>
+            {versionLabel === null ? null : <span className={css.version}>{versionLabel}</span>}
+            {state.dirty ? <span className={css.pending}>{t('unsaved')}</span> : null}
+          </span>
+        )}
       </div>
       <div className={css.body}>
         {state.status === 'loading' ? <p className={css.readOnly} role="status">{t('loading')}</p> : null}
