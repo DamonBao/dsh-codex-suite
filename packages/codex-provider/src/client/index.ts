@@ -2,7 +2,7 @@
 
 import type { Context as ClientContext } from '@deepseek-ai/cordis'
 import type { ConnectionHandle } from '@deepseek-ai/dsh-client-connection/client'
-import type {} from '@deepseek-ai/dsh-client-ui-settings/client'
+import type {} from '@deepseek-ai/dsh-client-ui-plugin-manager/client'
 // Type-only: pulls the SlotRegistry service merge (ctx.slots).
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type {} from '@deepseek-ai/dsh-client-locale/client'
@@ -33,15 +33,14 @@ export function apply(ctx: ClientContext): void {
     ...controller.face(connection.isLoopback),
     getLocale: () => ctx.locale.getLocale().active,
   }
-  const t = ctx.locale.bind(NS)
 
   ctx.on('connection/reset', () => { void controller.load() })
-  ctx.slots.inject('settings.section', () => ctx.slots.register({
-    name: 'settings.section',
-    id: 'openai-codex',
-    order: 11,
-    label: () => t('title'),
-    locale: NS,
-    inject: (): CodexSettingsInjected => face,
-  }, CodexSettingsSection))
+  for (const bundle of ['@jcy2387/dsh-codex-provider', '@jcy2387/dsh-suite']) {
+    ctx.slots.inject('plugins.row.config', () => ctx.slots.register({
+      name: 'plugins.row.config',
+      key: `${bundle}#codex-provider`,
+      locale: NS,
+      inject: (): CodexSettingsInjected => face,
+    }, CodexSettingsSection))
+  }
 }

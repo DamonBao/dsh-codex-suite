@@ -4,13 +4,14 @@
  * published from `./client` and discovered through the `dsh.client` manifest.
  */
 
+import { importLegacySettings } from './legacy-settings.ts'
 import { homedir } from 'node:os'
 import { access } from 'node:fs/promises'
 import { resolve as resolvePath } from 'node:path'
 import { createModels } from '@earendil-works/pi-ai'
 import type { AuthContext, Provider, Transport } from '@earendil-works/pi-ai'
 import { openaiCodexProvider } from '@earendil-works/pi-ai/providers/openai-codex'
-import type { Context } from '@deepseek-ai/cordis'
+import type { Context, Volatile } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import type { AttachmentStore } from '@deepseek-ai/dsh-attachment'
 import type {} from '@deepseek-ai/dsh-client-connection'
@@ -69,7 +70,7 @@ const DEFAULT_REQUEST_IMAGE_PIXEL_BUDGET = 2048 * 2048
 const DEFAULT_REQUEST_IMAGE_MAX_BYTES = 1024 * 1024
 
 /** User-configurable provider settings. */
-export interface Config {
+export interface Options {
   credentialRef?: string
   transport?: Transport
   timeoutMs?: number
@@ -79,6 +80,11 @@ export interface Config {
   ipv6CallbackBridge?: boolean
   proactiveRefresh?: boolean
   proxyMode?: CodexProxyMode
+}
+
+/** Resolved live configuration supplied by Cordis. */
+export interface Config extends Omit<Options, 'proxyMode'> {
+  proxyMode: Volatile<CodexProxyMode>
 }
 
 const CodexTransportSchema = z.union(['sse', 'websocket', 'websocket-cached', 'auto'])
@@ -93,7 +99,7 @@ export interface CodexProviderSettings {
   proxyMode: CodexProxyMode
 }
 
-/** Settings namespace written to `$DSH_HOME/settings.yaml`. */
+/** Legacy section name used when importing pre-0.1.7 settings. */
 export const CODEX_SETTINGS_NAMESPACE = 'openai-codex'
 /** Restart-applied settings schema exposed to Harness configuration surfaces. */
 export const CodexProviderSettings: z<CodexProviderSettings> = z.object({
@@ -101,7 +107,7 @@ export const CodexProviderSettings: z<CodexProviderSettings> = z.object({
 })
 
 /** Runtime schema for provider configuration. */
-export const Config: z<Config> = z.object({
+export const Config = z.object({
   credentialRef: z.string().role('credential-ref').default(DEFAULT_CREDENTIAL_REF),
   transport: CodexTransportSchema.default(DEFAULT_CODEX_TRANSPORT),
   timeoutMs: z.natural(),
@@ -110,7 +116,7 @@ export const Config: z<Config> = z.object({
   retryPolicy: RetryPolicySchema,
   ipv6CallbackBridge: z.boolean().default(true),
   proactiveRefresh: z.boolean().default(true),
-  proxyMode: CodexProxyModeSchema.default('auto'),
+  proxyMode: CodexProxyModeSchema.default('auto').volatile(),
 })
 
 /** Fully resolved provider profile settings. */
@@ -127,7 +133,7 @@ export interface ResolvedConfig {
 }
 
 /** Resolve defaults and timer bounds before registering the route. */
-export function resolveConfig(config: Config): ResolvedConfig {
+export function resolveConfig(config: Options): ResolvedConfig {
   const streamIdleTimeoutMs = config.streamIdleTimeoutMs ?? DEFAULT_STREAM_IDLE_TIMEOUT_MS
   if (!Number.isFinite(streamIdleTimeoutMs)
     || streamIdleTimeoutMs <= 0
@@ -167,16 +173,14 @@ export function assertCodexCatalog(provider: Provider): void {
 
 /** Register the provider, OAuth lifecycle, and optional loopback-only Web RPC. */
 export function apply(ctx: Context, config: Config): void {
-  const resolved = resolveConfig(config)
-  const networkSettings = ctx.settings.register(
-    CODEX_SETTINGS_NAMESPACE,
-    CodexProviderSettings,
-    { base: { proxyMode: resolved.proxyMode }, applies: 'restart' },
-  )
-  const activeProxyMode = networkSettings.get().proxyMode
+  const resolved = resolveConfig({ ...config, proxyMode: config.proxyMode.get() })
+  const settingsNs = ctx.fiber.entry?.options.id ?? 'codex-provider'
+  ctx.effect(() => ctx.settings.configure({ auto: false }, ctx.fiber))
+  importLegacySettings(ctx, CODEX_SETTINGS_NAMESPACE, settingsNs)
+  const activeProxyMode = resolved.proxyMode
   const network = new CodexNetworkManager(activeProxyMode)
   const networkSnapshot = (): CodexNetworkState => {
-    const configuredProxyMode = networkSettings.get().proxyMode
+    const configuredProxyMode = config.proxyMode.get()
     return {
       ...network.status(),
       activeProxyMode,
@@ -273,7 +277,7 @@ export function apply(ctx: Context, config: Config): void {
     status: () => auth.status(),
     network: async () => networkSnapshot(),
     setProxyMode: async (mode: CodexProxyMode) => {
-      await networkSettings.update({ proxyMode: mode })
+      await ctx.settings.update(settingsNs, { proxyMode: mode })
       return networkSnapshot()
     },
     usage: async () => {

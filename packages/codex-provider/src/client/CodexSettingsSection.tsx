@@ -30,7 +30,7 @@ export interface CodexSettingsInjected extends CodexAuthCardFace {
 
 /** Props bound by the Settings section slot. */
 export type CodexSettingsSectionProps =
-  PropsRuntime<'settings.section'>
+  PropsRuntime<'plugins.row.config'>
   & PropsLocale<'settings.codexProvider'>
   & InjectFace<CodexSettingsInjected>
 
@@ -459,8 +459,13 @@ function UsagePanel({
   )
 }
 
-/** Render the external provider's independent Settings section. */
+/** Summarize the provider row or render its full configuration page. */
 export function CodexSettingsSection(props: CodexSettingsSectionProps): ReactNode {
+  if (props.view === 'summary') return <p>{props.t('description')}</p>
+  return <CodexSettingsPage {...props} />
+}
+
+function CodexSettingsPage(props: CodexSettingsSectionProps): ReactNode {
   const { t } = props
   const locale = props.getLocale()
   const state = props.useCodexAuth(snapshot => snapshot)

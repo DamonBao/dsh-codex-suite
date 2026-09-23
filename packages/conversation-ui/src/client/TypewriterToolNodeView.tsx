@@ -2,18 +2,18 @@ import { createElement, useCallback, useLayoutEffect, useRef, useState, type Com
 import { createPortal } from 'react-dom'
 import { FiTool } from 'react-icons/fi'
 import {
-  IconAgentPresetOutline16,
-  IconApiOutline14,
-  IconBrowseOutline16,
-  IconChecklistOutline14,
-  IconCordisPluginOutline14,
-  IconDataOutline16,
-  IconEditOutline16,
-  IconGlobeOutline14,
-  IconQuestionOutline14,
-  IconSearchOutline16,
-  IconSettingsOutline16,
-  IconSkillOutline16,
+  IconAgentPresetOutlineMedium,
+  IconApiOutlineMedium,
+  IconBrowseOutlineMedium,
+  IconChecklistOutlineMedium,
+  IconCordisPluginOutlineMedium,
+  IconDataOutlineMedium,
+  IconEditOutlineMedium,
+  IconGlobeOutlineMedium,
+  IconQuestionOutlineMedium,
+  IconSearchOutlineMedium,
+  IconSettingsOutlineMedium,
+  IconSkillOutlineMedium,
   StateDot,
   type IconProps,
 } from '@deepseek-ai/dsh-client-ui-primitives'
@@ -53,24 +53,24 @@ export type ToolSemanticKind =
   | 'other'
 
 const TOOL_ICONS: Record<ToolSemanticKind, ComponentType<IconProps>> = {
-  search: IconSearchOutline16,
-  read: IconBrowseOutline16,
-  edit: IconEditOutline16,
-  terminal: IconApiOutline14,
-  data: IconDataOutline16,
-  web: IconGlobeOutline14,
+  search: IconSearchOutlineMedium,
+  read: IconBrowseOutlineMedium,
+  edit: IconEditOutlineMedium,
+  terminal: IconApiOutlineMedium,
+  data: IconDataOutlineMedium,
+  web: IconGlobeOutlineMedium,
   code: FiTool as ComponentType<IconProps>,
-  skill: IconSkillOutline16,
-  agent: IconAgentPresetOutline16,
-  plugin: IconCordisPluginOutline14,
-  question: IconQuestionOutline14,
-  settings: IconSettingsOutline16,
-  checklist: IconChecklistOutline14,
+  skill: IconSkillOutlineMedium,
+  agent: IconAgentPresetOutlineMedium,
+  plugin: IconCordisPluginOutlineMedium,
+  question: IconQuestionOutlineMedium,
+  settings: IconSettingsOutlineMedium,
+  checklist: IconChecklistOutlineMedium,
   other: FiTool as ComponentType<IconProps>,
 }
 
 const CONVERSATION_NODE_ICONS: Readonly<Partial<Record<string, ComponentType<IconProps>>>> = {
-  context: IconBrowseOutline16,
+  context: IconBrowseOutlineMedium,
 }
 
 function toolTokens(toolName: string): readonly string[] {

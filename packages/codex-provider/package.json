@@ -1,13 +1,14 @@
 {
   "name": "@jcy2387/dsh-codex-provider",
   "displayName": "OpenAI Codex Provider",
-  "description": "OpenAI Codex OAuth provider and native settings UI for DeepSeek Harness",
-  "version": "0.1.6-alpha.2",
+  "description": "Connect a ChatGPT account, choose a proxy, and view usage and reset credits.",
+  "version": "0.1.7-rc.1",
   "author": "jcy2387",
   "type": "module",
   "packageManager": "pnpm@11.7.0",
   "engines": {
-    "node": "^22.19.0 || >=24.0.0"
+    "node": "^22.19.0 || >=24.0.0",
+    "dsh": ">=0.1.7-rc.1 <0.1.8-0"
   },
   "publishConfig": {
     "access": "public",
@@ -33,7 +34,8 @@
       "default": "./lib/client.cjs"
     },
     "./cordis.patch.yml": "./cordis.patch.yml",
-    "./package.json": "./package.json"
+    "./package.json": "./package.json",
+    "./locale/*.json": "./locale/*.json"
   },
   "files": [
     "lib/index.js",
@@ -44,7 +46,9 @@
     "docs/images/openai-codex-settings.svg",
     "README.md",
     "README.zh.md",
-    "LICENSE"
+    "LICENSE",
+    "locale",
+    "icon.svg"
   ],
   "scripts": {
     "build": "tsc -p tsconfig.build.host.json && tsc -p tsconfig.build.client.json && tsdown",
@@ -56,9 +60,6 @@
     "typecheck": "tsc -p tsconfig.host.json --noEmit && tsc -p tsconfig.client.json --noEmit"
   },
   "dsh": {
-    "engines": {
-      "dsh": ">=0.1.6-alpha.2 <0.1.7-0"
-    },
     "bundle": {
       "patch": "./cordis.patch.yml"
     },
@@ -67,7 +68,8 @@
         "@deepseek-ai/dsh-client-connection",
         "@deepseek-ai/dsh-client-ui-renderer",
         "@deepseek-ai/dsh-client-ui-settings",
-        "@deepseek-ai/dsh-client-locale"
+        "@deepseek-ai/dsh-client-locale",
+        "@deepseek-ai/dsh-client-ui-plugin-manager"
       ],
       "platform": "web"
     }
@@ -82,44 +84,47 @@
   ],
   "license": "MIT",
   "peerDependencies": {
-    "@deepseek-ai/cordis": "^4.0.2",
-    "@deepseek-ai/dsh-attachment": ">=0.1.6-alpha.2 <0.1.7-0",
-    "@deepseek-ai/dsh-client-connection": ">=0.1.6-alpha.2 <0.1.7-0",
-    "@deepseek-ai/dsh-client-locale": ">=0.1.6-alpha.2 <0.1.7-0",
-    "@deepseek-ai/dsh-client-store": ">=0.1.6-alpha.2 <0.1.7-0",
-    "@deepseek-ai/dsh-client-ui-primitives": ">=0.1.6-alpha.2 <0.1.7-0",
-    "@deepseek-ai/dsh-client-ui-renderer": ">=0.1.6-alpha.2 <0.1.7-0",
-    "@deepseek-ai/dsh-client-ui-settings": ">=0.1.6-alpha.2 <0.1.7-0",
-    "@deepseek-ai/dsh-client-ui-slots": ">=0.1.6-alpha.2 <0.1.7-0",
-    "@deepseek-ai/dsh-credentials": ">=0.1.6-alpha.2 <0.1.7-0",
-    "@deepseek-ai/dsh-host-webserver": ">=0.1.6-alpha.2 <0.1.7-0",
-    "@deepseek-ai/dsh-launch-environment": ">=0.1.6-alpha.2 <0.1.7-0",
-    "@deepseek-ai/dsh-llm": ">=0.1.6-alpha.2 <0.1.7-0",
-    "@deepseek-ai/dsh-llm-pi-ai": ">=0.1.6-alpha.2 <0.1.7-0",
-    "@deepseek-ai/dsh-settings": ">=0.1.6-alpha.2 <0.1.7-0",
-    "@deepseek-ai/dsh-timeout": ">=0.1.6-alpha.2 <0.1.7-0",
-    "@deepseek-ai/schemastery": "^3.18.2",
+    "@deepseek-ai/cordis": "~4.0.4",
+    "@deepseek-ai/dsh-attachment": ">=0.1.7-rc.1 <0.1.8-0",
+    "@deepseek-ai/dsh-client-connection": ">=0.1.7-rc.1 <0.1.8-0",
+    "@deepseek-ai/dsh-client-locale": ">=0.1.7-rc.1 <0.1.8-0",
+    "@deepseek-ai/dsh-client-store": ">=0.1.7-rc.1 <0.1.8-0",
+    "@deepseek-ai/dsh-client-ui-primitives": ">=0.1.7-rc.1 <0.1.8-0",
+    "@deepseek-ai/dsh-client-ui-renderer": ">=0.1.7-rc.1 <0.1.8-0",
+    "@deepseek-ai/dsh-client-ui-settings": ">=0.1.7-rc.1 <0.1.8-0",
+    "@deepseek-ai/dsh-client-ui-slots": ">=0.1.7-rc.1 <0.1.8-0",
+    "@deepseek-ai/dsh-credentials": ">=0.1.7-rc.1 <0.1.8-0",
+    "@deepseek-ai/dsh-host-webserver": ">=0.1.7-rc.1 <0.1.8-0",
+    "@deepseek-ai/dsh-launch-environment": ">=0.1.7-rc.1 <0.1.8-0",
+    "@deepseek-ai/dsh-llm": ">=0.1.7-rc.1 <0.1.8-0",
+    "@deepseek-ai/dsh-llm-pi-ai": ">=0.1.7-rc.1 <0.1.8-0",
+    "@deepseek-ai/dsh-settings": ">=0.1.7-rc.1 <0.1.8-0",
+    "@deepseek-ai/dsh-timeout": ">=0.1.7-rc.1 <0.1.8-0",
+    "@deepseek-ai/schemastery": "~3.18.4",
     "@earendil-works/pi-ai": "^0.85.1",
-    "react": "^18.2.0"
+    "react": "^18.2.0",
+    "@deepseek-ai/dsh-app-boot": ">=0.1.7-rc.1 <0.1.8-0",
+    "@deepseek-ai/cordis-plugin-loader": "~1.0.5",
+    "@deepseek-ai/dsh-client-ui-plugin-manager": ">=0.1.7-rc.1 <0.1.8-0"
   },
   "devDependencies": {
-    "@deepseek-ai/cordis": "4.0.2",
-    "@deepseek-ai/dsh-attachment": "0.1.6-alpha.2",
-    "@deepseek-ai/dsh-client-connection": "0.1.6-alpha.2",
-    "@deepseek-ai/dsh-client-locale": "0.1.6-alpha.2",
-    "@deepseek-ai/dsh-client-store": "0.1.6-alpha.2",
-    "@deepseek-ai/dsh-client-ui-primitives": "0.1.6-alpha.2",
-    "@deepseek-ai/dsh-client-ui-renderer": "0.1.6-alpha.2",
-    "@deepseek-ai/dsh-client-ui-settings": "0.1.6-alpha.2",
-    "@deepseek-ai/dsh-client-ui-slots": "0.1.6-alpha.2",
-    "@deepseek-ai/dsh-credentials": "0.1.6-alpha.2",
-    "@deepseek-ai/dsh-host-webserver": "0.1.6-alpha.2",
-    "@deepseek-ai/dsh-launch-environment": "0.1.6-alpha.2",
-    "@deepseek-ai/dsh-llm": "0.1.6-alpha.2",
-    "@deepseek-ai/dsh-llm-pi-ai": "0.1.6-alpha.2",
-    "@deepseek-ai/dsh-settings": "0.1.6-alpha.2",
-    "@deepseek-ai/dsh-timeout": "0.1.6-alpha.2",
-    "@deepseek-ai/schemastery": "3.18.2",
+    "@deepseek-ai/cordis": "4.0.4",
+    "@deepseek-ai/dsh-attachment": "0.1.7-rc.1",
+    "@deepseek-ai/dsh-client-connection": "0.1.7-rc.1",
+    "@deepseek-ai/dsh-client-locale": "0.1.7-rc.1",
+    "@deepseek-ai/dsh-client-store": "0.1.7-rc.1",
+    "@deepseek-ai/dsh-client-ui-primitives": "0.1.7-rc.1",
+    "@deepseek-ai/dsh-client-ui-renderer": "0.1.7-rc.1",
+    "@deepseek-ai/dsh-client-ui-settings": "0.1.7-rc.1",
+    "@deepseek-ai/dsh-client-ui-slots": "0.1.7-rc.1",
+    "@deepseek-ai/dsh-credentials": "0.1.7-rc.1",
+    "@deepseek-ai/dsh-host-webserver": "0.1.7-rc.1",
+    "@deepseek-ai/dsh-launch-environment": "0.1.7-rc.1",
+    "@deepseek-ai/dsh-llm": "0.1.7-rc.1",
+    "@deepseek-ai/dsh-llm-pi-ai": "0.1.7-rc.1",
+    "@deepseek-ai/dsh-settings": "0.1.7-rc.1",
+    "@deepseek-ai/dsh-timeout": "0.1.7-rc.1",
+    "@deepseek-ai/schemastery": "3.18.4",
     "@earendil-works/pi-ai": "0.85.1",
     "@types/node": "^22.20.0",
     "@types/react": "~18.3.1",
@@ -128,9 +133,18 @@
     "react": "^18.3.1",
     "tsdown": "^0.22.2",
     "typescript": "^5.9.3",
-    "vitest": "^4.1.8"
+    "vitest": "^4.1.8",
+    "@deepseek-ai/dsh-app-boot": "0.1.7-rc.1",
+    "@deepseek-ai/cordis-plugin-loader": "1.0.5",
+    "@deepseek-ai/dsh-client-ui-plugin-manager": "0.1.7-rc.1",
+    "@deepseek-ai/dsh-config-editor": "0.1.7-rc.1",
+    "@deepseek-ai/dsh-hmr": "0.1.7-rc.1",
+    "@deepseek-ai/cordis-plugin-timer": "1.1.6",
+    "@deepseek-ai/cordis-plugin-include": "1.0.9"
   },
   "dependencies": {
-    "undici": "7.29.0"
-  }
+    "undici": "7.29.0",
+    "yaml": "^2.8.1"
+  },
+  "icon": "./icon.svg"
 }

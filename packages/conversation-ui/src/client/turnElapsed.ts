@@ -13,7 +13,7 @@ export function formatRunDuration(ms: number, t: TurnElapsedTranslator): string 
 
 export function formatTurnElapsed(ms: number, t: TurnElapsedTranslator): string {
   const duration = formatRunDuration(ms, t)
-  const label = t('message.ranFor', { duration })
+  const label = t('message.turnProcess.took', { duration })
   // The requested Codex surface uses “耗时”; preserve every other locale's
   // native conversation translation unchanged.
   return label === `用时 ${duration}` ? `耗时 ${duration}` : label
@@ -21,7 +21,7 @@ export function formatTurnElapsed(ms: number, t: TurnElapsedTranslator): string 
 
 export function formatTurnProcessed(ms: number, t: TurnElapsedTranslator): string {
   const duration = formatRunDuration(ms, t)
-  const label = t('message.ranFor', { duration })
+  const label = t('message.turnProcess.took', { duration })
   // Keep the native duration grammar and only replace the Chinese state word.
   return label === `用时 ${duration}` ? `已处理 ${duration}` : label
 }

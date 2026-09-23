@@ -1,10 +1,10 @@
 import { useLayoutEffect, useState } from 'react'
 import type { TurnTailOwnerProps } from '@deepseek-ai/dsh-client-ui-chat/client'
 import {
-  IconChevronDownOutline14,
-  IconChevronUpOutline14,
-  IconGlobeOutline14,
-  IconProjectAddOutline16,
+  IconChevronDownOutlineMedium,
+  IconChevronUpOutlineMedium,
+  IconGlobeOutlineMedium,
+  IconProjectAddOutlineMedium,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import { selectDeliverables, type DeliverableEntry } from './deliverables.ts'
 import css from './DeliverablesCard.module.css'
@@ -86,7 +86,7 @@ export function DeliverablesCard({ matched, turn, openFile }: DeliverablesCardPr
     <section className={css.root} data-stream-deliverables-card data-stream-deliverables-count={entries.length}>
       <div className={css.header}>
         <span className={css.headerIcon} aria-hidden>
-          {hasFiles ? <IconProjectAddOutline16 size={20} /> : <IconGlobeOutline14 size={20} />}
+          {hasFiles ? <IconProjectAddOutlineMedium size={20} /> : <IconGlobeOutlineMedium size={20} />}
         </span>
         <div className={css.heading}>
           <strong className={css.title}>{summary}</strong>
@@ -135,12 +135,12 @@ export function DeliverablesCard({ matched, turn, openFile }: DeliverablesCardPr
       {hidden > 0 && (
         <button type="button" className={css.more} onClick={() => { setExpanded(true) }}>
           再显示 {hidden} 个{hiddenKindLabel(entries.slice(visible.length))}
-          <span className={css.moreIcon} aria-hidden><IconChevronDownOutline14 /></span>
+          <span className={css.moreIcon} aria-hidden><IconChevronDownOutlineMedium /></span>
         </button>
       )}
       {expanded && entries.length > 3 && (
         <button type="button" className={css.more} onClick={() => { setExpanded(false) }}>
-          收起 <span className={css.moreIcon} aria-hidden><IconChevronUpOutline14 /></span>
+          收起 <span className={css.moreIcon} aria-hidden><IconChevronUpOutlineMedium /></span>
         </button>
       )}
     </section>

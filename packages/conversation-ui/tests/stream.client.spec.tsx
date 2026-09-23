@@ -101,7 +101,7 @@ function assistantProps(
     t: (key: string, parameters?: Record<string, unknown>) => {
       if (key === 'duration.minutes') return `${parameters?.minutes}分${parameters?.seconds}秒`
       if (key === 'duration.seconds') return `${parameters?.seconds}秒`
-      if (key === 'message.ranFor') return `用时 ${parameters?.duration}`
+      if (key === 'message.turnProcess.took') return `用时 ${parameters?.duration}`
       return key
     },
   } as unknown as Parameters<typeof TypewriterAssistantNodeView>[0]
@@ -270,7 +270,7 @@ describe('assistant renderer', () => {
   it('renders Codex duration while delegating disclosure state to the native owner', () => {
     function Fixture() {
       const [open, setOpen] = useState(false)
-      const turnProcess = { spec: PROCESS_SPEC, foldable: true, open, setOpen }
+      const turnProcess = { hasContent: true, spec: PROCESS_SPEC, foldable: true, open, setOpen }
       return <CodexTurnProcessNodeView {...turnProcessProps(turnProcess)} />
     }
     const view = render(<Fixture />)
@@ -283,7 +283,7 @@ describe('assistant renderer', () => {
   it('uses native turnProcess for final-node reasoning and beforematch recovery', () => {
     function Fixture() {
       const [open, setOpen] = useState(false)
-      const turnProcess = { spec: PROCESS_SPEC, foldable: true, open, setOpen }
+      const turnProcess = { hasContent: true, spec: PROCESS_SPEC, foldable: true, open, setOpen }
       return <>
         <CodexTurnProcessNodeView {...turnProcessProps(turnProcess)} />
         <TypewriterAssistantNodeView
@@ -334,7 +334,7 @@ describe('assistant renderer', () => {
       ...(props.node.location as unknown as { turn: Record<string, unknown> }).turn,
       end: { time: 6_000, data: { reason: { kind: 'error' } } },
     }
-    const turnProcess = { spec: PROCESS_SPEC, foldable: false, open: false, setOpen: vi.fn() }
+    const turnProcess = { hasContent: true, spec: PROCESS_SPEC, foldable: false, open: false, setOpen: vi.fn() }
     const view = render(
       <CompactTranscriptProvider compact>
         <TypewriterAssistantNodeView
@@ -364,7 +364,7 @@ describe('assistant renderer', () => {
       location: { kind: 'step', turn, step: { step: 1 } },
       data: { step: 1 },
     }
-    const turnProcess = {
+    const turnProcess = { hasContent: true,
       spec: {
         turn: 2,
         controlAnchorSeq: 5533,
@@ -397,7 +397,7 @@ describe('assistant renderer', () => {
   it('falls back to Codex folding while older DSH history remains paginated', () => {
     function Fixture() {
       const [open, setOpen] = useState(false)
-      const turnProcess = { spec: PROCESS_SPEC, foldable: false, open, setOpen }
+      const turnProcess = { hasContent: true, spec: PROCESS_SPEC, foldable: false, open, setOpen }
       return <CompactTranscriptProvider compact>
         <div data-chat-anchor-key="process-control" hidden>
           <CodexTurnProcessNodeView {...turnProcessProps(turnProcess)} />
@@ -428,7 +428,7 @@ describe('assistant renderer', () => {
   })
 
   it('respects Normal transcript mode and incomplete first-Turn windows', () => {
-    const turnProcess = { spec: PROCESS_SPEC, foldable: false, open: false, setOpen: vi.fn() }
+    const turnProcess = { hasContent: true, spec: PROCESS_SPEC, foldable: false, open: false, setOpen: vi.fn() }
     const normal = render(
       <CompactTranscriptProvider compact={false}>
         <TypewriterAssistantNodeView
@@ -466,7 +466,7 @@ describe('assistant renderer', () => {
   it('uses until-found on fallback process seats and reveals through native state', async () => {
     function Fixture() {
       const [open, setOpen] = useState(false)
-      const turnProcess = { spec: PROCESS_SPEC, foldable: false, open, setOpen }
+      const turnProcess = { hasContent: true, spec: PROCESS_SPEC, foldable: false, open, setOpen }
       const processProps = assistantProps('settled', [
         { kind: 'reasoning', text: 'earlier process reasoning' },
       ], { completed: true, nodeKey: 'process-1', paginated: true })
@@ -1034,7 +1034,8 @@ describe('client plugin lifecycle', () => {
 describe('plugin Config schema', () => {
   it('fills defaults when the overlay config is omitted', () => {
     const resolved = Config({} as never)
-    expect(resolved).toEqual(DEFAULT_CONVERSATION_CONFIG)
+    expect(resolved).toMatchObject(DEFAULT_CONVERSATION_CONFIG)
+    expect(resolved.thinkAutoExpand.get()).toBe(true)
   })
 
   it('accepts a full override and rejects invalid values', () => {
@@ -1045,7 +1046,7 @@ describe('plugin Config schema', () => {
       scrollSpeedPxPerSec: 100,
       maxScrollSpeedPxPerSec: 400,
     })
-    expect(resolved).toEqual({
+    expect(resolved).toMatchObject({
       mode: 'teleprompter',
       preset: 'realtime',
       revealCharsPerSec: 60,

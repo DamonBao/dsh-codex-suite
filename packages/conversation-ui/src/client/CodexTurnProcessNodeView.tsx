@@ -6,8 +6,8 @@ import type {
   TurnProcessOwnerProps,
 } from '@deepseek-ai/dsh-client-ui-chat/client'
 import {
-  IconChevronDownOutline14,
-  IconChevronRightOutline14,
+  IconChevronDownOutlineMedium,
+  IconChevronRightOutlineMedium,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import { formatTurnElapsed } from './turnElapsed.ts'
 import { useCompactTranscript } from './TranscriptViewBridge.tsx'
@@ -99,7 +99,7 @@ export function CodexTurnProcessControl({
         }}
       >
         <span>{label}</span>
-        {turnProcess.open ? <IconChevronDownOutline14 /> : <IconChevronRightOutline14 />}
+        {turnProcess.open ? <IconChevronDownOutlineMedium /> : <IconChevronRightOutlineMedium />}
       </button>
     </div>
   )

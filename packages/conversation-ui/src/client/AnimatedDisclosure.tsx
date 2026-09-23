@@ -9,8 +9,8 @@
 
 import { type KeyboardEvent, type ReactNode } from 'react'
 import {
-  IconChevronDownOutline14,
-  IconChevronRightOutline14,
+  IconChevronDownOutlineMedium,
+  IconChevronRightOutlineMedium,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import css from './TypewriterAssistantNodeView.module.css'
 
@@ -78,7 +78,7 @@ export function AnimatedDisclosure({
           data-state={open ? 'expanded' : 'collapsed'}
           aria-hidden
         >
-          {open ? <IconChevronDownOutline14 size={14} /> : <IconChevronRightOutline14 size={14} />}
+          {open ? <IconChevronDownOutlineMedium size={14} /> : <IconChevronRightOutlineMedium size={14} />}
         </span>
       </div>
       <div className={css.disclosureContent} data-disclosure-content data-collapsed={open ? undefined : ''}>

@@ -3,23 +3,14 @@
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { pathToFileURL } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 import { Context } from '@deepseek-ai/cordis'
-import { SettingsProvider, type SettingsNamespace } from '@deepseek-ai/dsh-settings'
-import { afterEach, describe, expect, it } from 'vitest'
+import { mountSettingsProfile } from './support/settings-profile.ts'
+import { afterEach, describe, expect, it, onTestFinished } from 'vitest'
 import { CONVERSATION_PACKAGE_NAME, CONVERSATION_PACKAGE_VERSION } from '../src/package-meta.ts'
 import { apply, Config } from '../src/plugin.ts'
 import { CONVERSATION_SETTINGS_RPC, CONVERSATION_SETTINGS_RPC_CHANNEL } from '../src/settings-api.ts'
 import { CONVERSATION_SETTINGS_NS, DEFAULT_CONVERSATION_SETTINGS } from '../src/settings.ts'
-
-/** In-memory settings provider -- same shape as the Harness's own specs. */
-class MemorySettings extends SettingsProvider {
-  readonly writable = true
-  protected load(): Promise<Record<string, unknown>> { return Promise.resolve({}) }
-  protected persist(_ns: SettingsNamespace, _section: Record<string, unknown>): Promise<void> {
-    return Promise.resolve()
-  }
-}
 
 /** The prefix route the plugin registers on the webServer stub. */
 interface RouteRegistration {
@@ -51,13 +42,14 @@ function profileBaseUrl(specifier: string, bundled = true): string {
   return `${pathToFileURL(directory).href}/`
 }
 
-async function mountHost(baseUrl: string): Promise<{
+async function mountHost(baseUrl: string, inspectSource = true): Promise<{
   ctx: Context
-  fiber: ReturnType<Context['plugin']>
+  fiber: import('@deepseek-ai/cordis').Fiber
   route: RouteRegistration
   removed: () => number
 }> {
   const ctx = new Context()
+  onTestFinished(async () => { await ctx.fiber.dispose() })
   ctx.baseUrl = baseUrl
   const routes: RouteRegistration[] = []
   let removeCalls = 0
@@ -72,9 +64,16 @@ async function mountHost(baseUrl: string): Promise<{
       return () => { removeCalls += 1 }
     },
   } as never)
-  await ctx.plugin(MemorySettings).await()
-  const fiber = ctx.plugin({ apply, Config })
-  await fiber.await()
+  const home = mkdtempSync(join(tmpdir(), 'conversation-settings-'))
+  tempProfiles.add(home)
+  const { fiber, profile } = await mountSettingsProfile(ctx, home, { apply, Config }, CONVERSATION_SETTINGS_NS)
+  if (inspectSource) {
+    const manifest = JSON.parse(readFileSync(join(fileURLToPath(baseUrl), 'package.json'), 'utf8'))
+    const existing = JSON.parse(readFileSync(join(profile.dir, 'package.json'), 'utf8'))
+    // Source inspection reads the active profile manifest. These read-only cases
+    // do not recompose its bundles; settings writes use the original fixture.
+    writeFileSync(join(profile.dir, 'package.json'), JSON.stringify({ ...existing, dependencies: manifest.dependencies, dsh: manifest.dsh }))
+  }
   const route = routes.find(candidate => candidate.path === CONVERSATION_SETTINGS_RPC_CHANNEL)
   if (route === undefined) throw new Error('conversation-ui RPC route was not registered')
   return { ctx, fiber, route, removed: () => removeCalls }
@@ -127,15 +126,16 @@ describe('conversation-ui host settings', () => {
 
   it('registers the namespace with the default and disposes it with the fiber', async () => {
     const ctx = new Context()
-    await ctx.plugin(MemorySettings).await()
-    const fiber = ctx.plugin({ apply, Config })
-    await fiber.await()
+    onTestFinished(async () => { await ctx.fiber.dispose() })
+    const home = mkdtempSync(join(tmpdir(), 'conversation-settings-'))
+    tempProfiles.add(home)
+    const { fiber } = await mountSettingsProfile(ctx, home, { apply, Config }, CONVERSATION_SETTINGS_NS)
 
     const ns = CONVERSATION_SETTINGS_NS
-    expect(ctx.settings.get(ns)).toEqual(DEFAULT_CONVERSATION_SETTINGS)
+    expect(ctx.settings.describe().find(row => row.ns === ns)?.value).toEqual(DEFAULT_CONVERSATION_SETTINGS)
 
     await ctx.settings.update(ns, { thinkAutoExpand: false })
-    expect(ctx.settings.get(ns)).toEqual({ thinkAutoExpand: false })
+    expect(ctx.settings.describe().find(row => row.ns === ns)?.value).toEqual({ thinkAutoExpand: false })
 
     await expect(ctx.settings.update(ns, { thinkAutoExpand: 'nope' })).rejects.toThrow()
 
@@ -144,7 +144,7 @@ describe('conversation-ui host settings', () => {
   })
 
   it('serves the durable setting over the fenced plugin RPC route', async () => {
-    const { ctx, fiber, route, removed } = await mountHost(profileBaseUrl(`link:${process.cwd()}`))
+    const { ctx, route, removed } = await mountHost(profileBaseUrl('link:./plugin-source'), false)
 
     expect(route.path).toBe(CONVERSATION_SETTINGS_RPC_CHANNEL)
     const initial = await callRpc(route, CONVERSATION_SETTINGS_RPC.read, {})
@@ -153,7 +153,7 @@ describe('conversation-ui host settings', () => {
       ok: true,
       value: {
         version: CONVERSATION_PACKAGE_VERSION,
-        installation: 'development',
+        installation: 'unmanaged',
         writable: true,
         thinkAutoExpand: DEFAULT_CONVERSATION_SETTINGS.thinkAutoExpand,
         canUpgrade: false,
@@ -162,18 +162,23 @@ describe('conversation-ui host settings', () => {
 
     const updated = await callRpc(route, CONVERSATION_SETTINGS_RPC.write, { thinkAutoExpand: false })
     expect(updated.result).toMatchObject({ ok: true, value: { thinkAutoExpand: false } })
-    expect(ctx.settings.get(CONVERSATION_SETTINGS_NS)).toEqual({ thinkAutoExpand: false })
+    expect(ctx.settings.describe().find(row => row.ns === CONVERSATION_SETTINGS_NS)?.value).toEqual({ thinkAutoExpand: false })
 
     const malformed = await callRpc(route, CONVERSATION_SETTINGS_RPC.write, { thinkAutoExpand: 'false' })
     expect(malformed.result).toMatchObject({ ok: false, error: { code: 'settings-rejected' } })
 
     const blockedUpdate = await callRpc(route, CONVERSATION_SETTINGS_RPC.upgrade, {})
     expect(blockedUpdate.result).toMatchObject({ ok: false, error: { code: 'internal' } })
-    await fiber.dispose()
+    await ctx.fiber.dispose()
     expect(removed()).toBe(1)
   })
 
   it('enables the upgrade action only for a confirmed npm profile dependency', async () => {
+    const development = await mountHost(profileBaseUrl('link:./plugin-source'))
+    const developmentRead = await callRpc(development.route, CONVERSATION_SETTINGS_RPC.read, {})
+    expect(developmentRead.result).toMatchObject({ ok: true, value: { installation: 'development', canUpgrade: false } })
+    await development.fiber.dispose()
+
     const npm = await mountHost(profileBaseUrl('^0.1.0'))
     const npmRead = await callRpc(npm.route, CONVERSATION_SETTINGS_RPC.read, {})
     expect(npmRead.result).toMatchObject({
@@ -225,6 +230,7 @@ describe('conversation-ui host settings', () => {
 
   it('applies without a settings service present', async () => {
     const ctx = new Context()
+    onTestFinished(async () => { await ctx.fiber.dispose() })
     const fiber = ctx.plugin({ apply, Config })
     await fiber.await()
     // No throw means the optional settings injection skipped cleanly.

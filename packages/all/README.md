@@ -19,7 +19,7 @@ dsh plugin --profile web add @jcy2387/dsh-suite
 dsh web
 ```
 
-After installing, follow each plugin's quick start: connect a ChatGPT account in **Settings → OpenAI Codex**, then pick an `openai-codex` model — the conversation UI activates automatically for new conversations.
+After installing, follow each plugin's quick start: connect a ChatGPT account in **Plugins → DSH Codex Suite → codex-provider**, then pick an `openai-codex` model — the conversation UI activates automatically for new conversations.
 
 ## How the bundle works
 
