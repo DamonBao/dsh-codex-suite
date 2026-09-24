@@ -16,7 +16,7 @@ export function useCompactTranscript(): boolean {
 /** Preserve the native Chat view while exposing its injected preference to descendants. */
 export function wrapTranscriptView(Inner: ComponentType<ChatViewSlotProps>) {
   return function TranscriptViewBridge(props: ChatViewSlotProps) {
-    const compact = props.useTranscriptView(mode => mode === 'compact')
+    const compact = props.usePresentation(policy => !policy.liveProcessDetail && policy.foldCompletedTurns)
     return (
       <CompactTranscriptContext.Provider value={compact}>
         {createElement(Inner, props)}

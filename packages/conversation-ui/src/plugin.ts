@@ -1,4 +1,7 @@
-import type { Context } from '@deepseek-ai/cordis'
+import { pathToFileURL } from 'node:url'
+import { importLegacySettings } from './legacy-settings.ts'
+import type {} from '@deepseek-ai/dsh-settings'
+import type { Context, Volatile } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/dsh-host-webserver'
 import type { ConnectionRpcHandler } from '@deepseek-ai/dsh-client-connection'
 import Schema from '@deepseek-ai/schemastery'
@@ -18,9 +21,12 @@ export const name = 'dsh-conversation-ui'
  * validates the value against this schema at load and fills omitted fields
  * from the shared defaults, so an invalid value fails the load loudly.
  */
-export interface Config extends ConversationConfig {}
+export interface Config extends ConversationConfig {
+  thinkAutoExpand: Volatile<boolean>
+}
 
-export const Config: Schema<Config> = Schema.object({
+export const Config = Schema.object({
+  thinkAutoExpand: Schema.boolean().default(DEFAULT_CONVERSATION_SETTINGS.thinkAutoExpand).volatile(),
   mode: Schema.union(['typewriter', 'teleprompter'] as const).default(DEFAULT_CONVERSATION_CONFIG.mode),
   preset: Schema.union(['realtime', 'balanced', 'silky'] as const).default(DEFAULT_CONVERSATION_CONFIG.preset),
   revealCharsPerSec: Schema.number()
@@ -38,8 +44,8 @@ export const Config: Schema<Config> = Schema.object({
 })
 
 /**
- * Schema of the user-owned settings section. The Host keeps it in the durable
- * settings provider while the browser edits it through the plugin RPC below.
+ * Plain preference schema retained for callers that validate stored settings.
+ * The live preference is declared by Config and saved in the profile patch.
  */
 export const ConversationSettingsSchema: Schema<ConversationSettings> = Schema.object({
   thinkAutoExpand: Schema.boolean().default(DEFAULT_CONVERSATION_SETTINGS.thinkAutoExpand),
@@ -58,30 +64,31 @@ export function apply(ctx: Context, config: Config): void {
     `[dsh-conversation-ui] plugin loaded! mode=${config.mode} preset=${config.preset} `
     + `seed=${config.revealCharsPerSec}cps scroll=native`,
   )
+  const { thinkAutoExpand: _thinkAutoExpand, ...bootConfig } = config
   ctx.inject(['webServer'], (httpCtx) => {
     httpCtx.effect(
-      () => httpCtx.webServer.tapIndex(html => injectConversationConfig(html, config)),
+      () => httpCtx.webServer.tapIndex(html => injectConversationConfig(html, bootConfig)),
       'dsh-conversation-ui: boot config bridge',
     )
   })
   // The core settings RPC deliberately filters third-party namespaces. Keep
-  // the durable provider as the authority, but expose this one schema through
+  // profile configuration as the authority, but expose this preference through
   // the plugin's own loopback-only connection channel instead.
   ctx.inject(['settings'], (settingsCtx) => {
-    const scope = settingsCtx.settings.register(
-      CONVERSATION_SETTINGS_NS,
-      ConversationSettingsSchema,
-      { applies: 'live' },
-    )
+    const settingsNs = ctx.fiber.entry?.options.id ?? CONVERSATION_SETTINGS_NS
+    settingsCtx.effect(() => settingsCtx.settings.configure({ auto: false }, ctx.fiber))
+    importLegacySettings(settingsCtx, CONVERSATION_SETTINGS_NS, settingsNs)
+    const profile = settingsCtx.get('profileContext')
+    const profileUrl = profile === undefined ? settingsCtx.baseUrl : pathToFileURL(`${profile.dir}/`).href
     let upgrade: Promise<void> | undefined
 
     const view = (): ConversationSettingsView => {
-      const installation = inspectProfileInstallation(settingsCtx.baseUrl, CONVERSATION_PACKAGE_NAME)
+      const installation = inspectProfileInstallation(profileUrl, CONVERSATION_PACKAGE_NAME)
       return {
         version: CONVERSATION_PACKAGE_VERSION,
         installation: installation.kind,
         writable: settingsCtx.settings.writable,
-        thinkAutoExpand: scope.get().thinkAutoExpand,
+        thinkAutoExpand: config.thinkAutoExpand.get(),
         canUpgrade: installation.kind === 'npm',
       }
     }
@@ -111,7 +118,7 @@ export function apply(ctx: Context, config: Config): void {
           }
         }
         try {
-          await scope.update({ thinkAutoExpand: (payload as { thinkAutoExpand: boolean }).thinkAutoExpand })
+          await settingsCtx.settings.update(settingsNs, { thinkAutoExpand: (payload as { thinkAutoExpand: boolean }).thinkAutoExpand })
         } catch {
           return {
             ok: false,
@@ -125,7 +132,7 @@ export function apply(ctx: Context, config: Config): void {
         return { ok: true, value: view() }
       }
       if (endpoint === CONVERSATION_SETTINGS_RPC.upgrade) {
-        const installation = inspectProfileInstallation(settingsCtx.baseUrl, CONVERSATION_PACKAGE_NAME)
+        const installation = inspectProfileInstallation(profileUrl, CONVERSATION_PACKAGE_NAME)
         if (installation.kind !== 'npm') {
           return { ok: false, error: { code: 'internal', message: 'conversation-ui is not an npm profile dependency', details: {} } }
         }

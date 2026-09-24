@@ -179,7 +179,7 @@ async function serveChannelRoute(
     if (!res.writableEnded) abort.abort()
   })
   try {
-    const result = await handler(endpoint, message.payload, abort.signal)
+    const result = await handler(endpoint, message.payload, abort.signal, mountCtx.connection.operator)
     sendJson(res, 200, { type: 'server-response', rpcId: message.rpcId, result })
   } catch (error) {
     sendText(res, 500, `handler failure: ${String(error)}`)

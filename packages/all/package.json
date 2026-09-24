@@ -1,13 +1,14 @@
 {
   "name": "@jcy2387/dsh-suite",
   "displayName": "DSH Codex Suite",
-  "description": "A pure bundle package that installs the Codex provider and Conversation UI plugins together for DeepSeek Harness.",
-  "version": "0.1.6-alpha.2",
+  "description": "Use ChatGPT accounts with Codex models and a Codex-style conversation view.",
+  "version": "0.1.7-rc.1",
   "author": "jcy2387",
   "type": "module",
   "packageManager": "pnpm@11.7.0",
   "engines": {
-    "node": "^22.19.0 || >=24.0.0"
+    "node": "^22.19.0 || >=24.0.0",
+    "dsh": ">=0.1.7-rc.1 <0.1.8-0"
   },
   "publishConfig": {
     "access": "public",
@@ -24,12 +25,11 @@
   "files": [
     "cordis.patch.yml",
     "README.md",
-    "LICENSE"
+    "LICENSE",
+    "locale",
+    "icon.svg"
   ],
   "dsh": {
-    "engines": {
-      "dsh": ">=0.1.6-alpha.2 <0.1.7-0"
-    },
     "bundle": {
       "patch": "./cordis.patch.yml"
     }
@@ -45,5 +45,11 @@
   "dependencies": {
     "@jcy2387/dsh-codex-provider": "workspace:*",
     "@jcy2387/dsh-conversation-ui": "workspace:*"
-  }
+  },
+  "exports": {
+    "./package.json": "./package.json",
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./locale/*.json": "./locale/*.json"
+  },
+  "icon": "./icon.svg"
 }

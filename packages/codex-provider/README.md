@@ -76,7 +76,7 @@ The plugin works in headless profiles too — the Web client half is optional; a
 
 ## Quick start
 
-1. Open **Settings → OpenAI Codex** and click **Connect**.
+1. Open **Plugins → DSH Codex Suite → codex-provider** and click **Connect**.
 2. In the login modal choose **Browser login** (or **Device login** on a remote machine) and complete ChatGPT authorization. Progress is shown live; you can cancel at any time.
 3. Once connected, pick an `openai-codex` model in the normal model selector and start chatting.
 
@@ -134,3 +134,5 @@ See the [monorepo README](../../README.md) for workspace-wide commands.
 ## License
 
 [MIT](LICENSE) © jcy2387
+
+This release targets DSH `0.1.7-rc.1`. It imports `openai-codex.proxyMode` from `settings.yaml` or `settings.yaml.imported` into the active profile’s `cordis.patch.yml`, recording a marker after success and retaining the source after failure. The plugin’s compatibility import fills only missing values. Exported `locale/en.json` and `locale/zh.json` localize the name and description in DSH.

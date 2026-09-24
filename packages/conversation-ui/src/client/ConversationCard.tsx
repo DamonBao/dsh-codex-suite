@@ -2,7 +2,7 @@
 
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type {} from '@deepseek-ai/dsh-client-ui-plugin-manager/client'
-import { IconRefreshOutline14 } from '@deepseek-ai/dsh-client-ui-primitives'
+import { IconRefreshOutlineMedium } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { ConversationCardFace } from './conversation-ui-card-controller.ts'
 import css from './ConversationCard.module.css'
 
@@ -77,7 +77,7 @@ export function ConversationCard(props: ConversationCardProps) {
                 title={state.canUpgrade ? undefined : t('updateUnavailable')}
                 onClick={props.upgrade}
               >
-                <span aria-hidden="true"><IconRefreshOutline14 /></span>
+                <span aria-hidden="true"><IconRefreshOutlineMedium /></span>
                 {t(state.upgrading ? 'updating' : 'update')}
               </button>
             </div>

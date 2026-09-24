@@ -7,8 +7,8 @@ import {
   type Ref,
 } from 'react'
 import {
-  IconChevronDownOutline14,
-  IconChevronRightOutline14,
+  IconChevronDownOutlineMedium,
+  IconChevronRightOutlineMedium,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import { useSearchableHidden } from './useSearchableHidden.ts'
 import css from './TypewriterAssistantNodeView.module.css'
@@ -180,7 +180,7 @@ function ToolActivityGroupFrame({
       >
         {header}
         <span className={css.toolGroupHeaderChevron} aria-hidden>
-          {collapsed ? <IconChevronRightOutline14 size={14} /> : <IconChevronDownOutline14 size={14} />}
+          {collapsed ? <IconChevronRightOutlineMedium size={14} /> : <IconChevronDownOutlineMedium size={14} />}
         </span>
       </button>
       {children}

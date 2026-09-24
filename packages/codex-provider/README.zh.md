@@ -76,7 +76,7 @@ dsh web
 
 ## 快速开始
 
-1. 打开 **设置 → OpenAI Codex**，点击**连接**。
+1. 打开 **插件 → DSH Codex Suite → codex-provider**，点击**连接**。
 2. 在登录弹窗中选择**浏览器登录**（远程机器可选**设备码登录**），完成 ChatGPT 授权。进度实时可见，随时可取消。
 3. 连接成功后，在常规模型选择器中挑选 `openai-codex` 模型即可开始对话。
 
@@ -134,3 +134,5 @@ pnpm --filter @jcy2387/dsh-codex-provider build
 ## 许可证
 
 [MIT](LICENSE) © jcy2387
+
+本版面向 DSH `0.1.7-rc.1`。旧 `openai-codex.proxyMode` 从 `settings.yaml` 或 `settings.yaml.imported` 导入当前 profile 的 `cordis.patch.yml`，成功后记录迁移标记；失败保留源文件供重试。插件兼容导入只补充缺失的值。名称和描述通过导出的 `locale/en.json`、`locale/zh.json` 跟随 DSH 界面语言。

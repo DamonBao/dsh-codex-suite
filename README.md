@@ -7,7 +7,7 @@
 
 English | [简体中文](README.zh.md)
 
-A suite of [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) (DSH) plugins that brings **ChatGPT/OpenAI Codex models** and a **Codex-style conversation experience** to the DSH Web UI. Built against DSH `0.1.6-alpha.2` (peer range `>=0.1.6-alpha.2 <0.1.7-0`).
+A suite of [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) (DSH) plugins that brings **ChatGPT/OpenAI Codex models** and a **Codex-style conversation experience** to the DSH Web UI. Built against DSH `0.1.7-rc.1` (peer range `>=0.1.7-rc.1 <0.1.8-0`).
 
 The repository is a pnpm monorepo containing two independent runtime plugins and one pure bundle package:
 
@@ -32,7 +32,7 @@ The two plugins are fully decoupled: the Conversation UI works with any model, a
 - **Banked rate-limit resets.** View how many resets the account has banked and their earliest expiry, then redeem one from a confirmation dialog to restore the 5-hour and weekly limit windows.
 - **Proxy-aware networking.** Auto-detects environment and system proxies (macOS / Windows / Linux), routes only OpenAI traffic through them, keeps loopback direct, and exposes an explicit proxy mode (auto / environment / off).
 - **Reliability-first defaults.** SSE transport by default (no partial-output duplication on WebSocket failure), 5-minute stream idle timeout, configurable retry policy.
-- **Native Settings page** at *Settings → OpenAI Codex* with zh/en localization, live status, and a loopback-only RPC boundary — credentials never leave the Host.
+- **Native Settings page** at *Plugins → DSH Codex Suite → codex-provider* with zh/en localization, live status, and a loopback-only RPC boundary — credentials never leave the Host.
 
 **Conversation UI — the chat rendered like Codex CLI**
 
@@ -45,22 +45,26 @@ The two plugins are fully decoupled: the Conversation UI works with any model, a
 
 ---
 
+Plugin display metadata is exported as `locale/en.json` and `locale/zh.json`, using `meta.title` and `meta.description`. DSH localizes the plugin list, details, and component names; the ordinary package description remains English for npm.
+
+The manifest declares a packaged SVG with `icon: "./icon.svg"`. The suite and both components use the teal code mark.
+
 ## Installation
 
-Prerequisites: DeepSeek Harness (`dsh`) `>=0.1.6-alpha.2 <0.1.7-0` with the `web` profile, Node.js `^22.19 || >=24`, pnpm 11.
+Prerequisites: DeepSeek Harness (`dsh`) `>=0.1.7-rc.1 <0.1.8-0` with the `web` profile, Node.js `^22.19 || >=24`, pnpm 11.
 
 **Install the whole suite (recommended):**
 
 ```sh
-dsh plugin --profile web add @jcy2387/dsh-suite@0.1.6-alpha.2
+dsh plugin --profile web add @jcy2387/dsh-suite@0.1.7-rc.1
 dsh web
 ```
 
 **Or install plugins individually:**
 
 ```sh
-dsh plugin --profile web add @jcy2387/dsh-codex-provider@0.1.6-alpha.2
-dsh plugin --profile web add @jcy2387/dsh-conversation-ui@0.1.6-alpha.2
+dsh plugin --profile web add @jcy2387/dsh-codex-provider@0.1.7-rc.1
+dsh plugin --profile web add @jcy2387/dsh-conversation-ui@0.1.7-rc.1
 dsh web
 ```
 
@@ -77,7 +81,7 @@ Install **either** the suite **or** the individual plugins in a given profile �
 ## Quick start
 
 1. Install the suite (see above) and open the Web UI (`dsh web`).
-2. Go to **Settings → OpenAI Codex**, click **Connect**, and choose **Browser login** (or **Device login** on a headless/remote machine). Complete the ChatGPT authorization.
+2. Go to **Plugins → DSH Codex Suite → codex-provider**, click **Connect**, and choose **Browser login** (or **Device login** on a headless/remote machine). Complete the ChatGPT authorization.
 3. Back in the chat, pick an `openai-codex` model in the model selector and start talking.
 4. Optional: review the usage panel in the same settings page, and tune the conversation stream in **Plugins → DSH Codex Suite (or Conversation UI)**.
 
@@ -119,7 +123,7 @@ To temporarily disable the Conversation UI without uninstalling it, apply the bu
 
 | Location | Controls |
 | --- | --- |
-| Settings → OpenAI Codex | Connect/disconnect account, login method, usage dashboard, banked-reset view and redemption, proxy mode. |
+| Plugins → DSH Codex Suite → codex-provider | Connect/disconnect account, login method, usage dashboard, banked-reset view and redemption, proxy mode. |
 | Plugins → DSH Codex Suite (or Conversation UI) | Auto-expand thinking (live), plugin version, one-click update for npm installs. |
 
 ## Architecture
@@ -132,6 +136,12 @@ Each runtime plugin ships two halves:
 The halves communicate through two narrow channels: an inline **boot-config global** (`window.__DSH_CONVERSATION_UI_CONFIG__`) injected into the served HTML carries validated plugin config to the browser, and the **authenticated Connection RPC** carries settings reads/writes back to the Host. Secrets (tokens, proxy URLs) never cross the RPC boundary.
 
 Package-level docs: [codex-provider](packages/codex-provider/README.md) · [conversation-ui](packages/conversation-ui/README.en.md) · [suite](packages/all/README.md)
+
+## Upgrading to DSH 0.1.7-rc.1
+
+On the first start of each profile, the plugins import `openai-codex.proxyMode` and `conversation-ui.thinkAutoExpand` from `$DSH_HOME/settings.yaml`, falling back to `settings.yaml.imported` when the live file is absent. Values are written to that profile’s `cordis.patch.yml`; the compatibility import only fills missing profile values. A successful import records a `.plugin-settings-migrations/` marker so later resets are not undone. Failed imports retain the source and retry on restart. DSH’s own importer renames the old file to `.imported`; back up DSH_HOME before upgrading.
+
+The provider keeps using `OPENAI_CODEX_OAUTH` in the original credential store; no credential is moved or deleted. Sessions and attachments remain owned by DSH and are not rewritten by this plugin. Keep the same DSH_HOME to retain them. Account and proxy controls live on the plugin’s `codex-provider` component page; conversation preferences live on the Suite or standalone Conversation UI configuration page.
 
 ## Development
 
@@ -152,7 +162,7 @@ pnpm --filter @jcy2387/dsh-conversation-ui build
 pnpm --dir packages/all pack --dry-run
 ```
 
-Tests run on [vitest](https://vitest.dev) — 15 suites covering the OAuth state machine, token refresh, network/proxy detection, usage and banked-reset parsing, the settings controllers, and the streaming client views. Client tests resolve the installed published DSH packages (a small module-table stand-in instantiates the shipped browser factory bundles). CI verifies release tags match all three package versions and audits the published tarball contents, then runs a consumer smoke test that installs the packed tarballs into a scratch project (resolving the published peer ranges against the real registry) and imports every Node-side entry point.
+Tests run on [vitest](https://vitest.dev) — 17 suites covering the OAuth state machine, token refresh, network/proxy detection, usage and banked-reset parsing, the settings controllers, and the streaming client views. Client tests resolve the installed published DSH packages (a small module-table stand-in instantiates the shipped browser factory bundles). CI verifies release tags match all three package versions and audits the published tarball contents, then runs a consumer smoke test that installs the packed tarballs into a scratch project (resolving the published peer ranges against the real registry) and imports every Node-side entry point.
 
 ### Release
 

@@ -1,4 +1,8 @@
-import { describe, expect, it } from 'vitest'
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { mountSettingsProfile } from './support/settings-profile.ts'
+import { describe, expect, it, onTestFinished } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import type {
   CredentialInfo,
@@ -11,8 +15,6 @@ import type {
 } from '@deepseek-ai/dsh-credentials'
 import { CredentialProvider } from '@deepseek-ai/dsh-credentials'
 import LlmRuntime from '@deepseek-ai/dsh-llm'
-import { SettingsProvider } from '@deepseek-ai/dsh-settings'
-import type { SettingsNamespace } from '@deepseek-ai/dsh-settings'
 import * as CodexProvider from '../src/index.ts'
 
 class MemoryCredentials extends CredentialProvider {
@@ -56,37 +58,24 @@ class MemoryCredentials extends CredentialProvider {
   }
 }
 
-class MemorySettings extends SettingsProvider {
-  readonly writable = true
-  private readonly doc: Record<string, unknown> = {}
-
-  protected override load(): Promise<Record<string, unknown>> {
-    return Promise.resolve(this.doc)
-  }
-
-  protected override persist(ns: SettingsNamespace, section: Record<string, unknown>): Promise<void> {
-    this.doc[ns] = section
-    return Promise.resolve()
-  }
-}
-
 describe('Codex provider plugin', () => {
   it('registers the native catalog and exposes exact context metadata', async () => {
     const ctx = new Context()
     await ctx.plugin(LlmRuntime)
     await ctx.plugin(MemoryCredentials)
-    await ctx.plugin(MemorySettings)
-    const fiber = await ctx.plugin(CodexProvider, {})
+    const home = mkdtempSync(join(tmpdir(), 'codex-profile-'))
+    onTestFinished(async () => { await ctx.fiber.dispose(); rmSync(home, { recursive: true, force: true }) })
+    const { fiber } = await mountSettingsProfile(ctx, home, CodexProvider, 'codex-provider')
 
     expect(ctx.settings.describe()).toEqual([
       expect.objectContaining({
-        ns: CodexProvider.CODEX_SETTINGS_NAMESPACE,
+        ns: 'codex-provider',
         value: { proxyMode: 'auto' },
-        applies: 'restart',
+        applies: 'live',
       }),
     ])
-    await ctx.settings.update(CodexProvider.CODEX_SETTINGS_NAMESPACE, { proxyMode: 'off' })
-    expect(ctx.settings.get(CodexProvider.CODEX_SETTINGS_NAMESPACE)).toEqual({ proxyMode: 'off' })
+    await ctx.settings.update('codex-provider', { proxyMode: 'off' })
+    expect(ctx.settings.describe().find(row => row.ns === 'codex-provider')?.value).toEqual({ proxyMode: 'off' })
 
     expect(ctx.llm.listProviders()).toEqual([{ id: 'openai-codex', name: 'OpenAI Codex' }])
     const models = await ctx.llm.listModels('openai-codex')
@@ -108,8 +97,8 @@ describe('Codex provider plugin', () => {
       streamIdleTimeoutMs: CodexProvider.DEFAULT_STREAM_IDLE_TIMEOUT_MS,
       ipv6CallbackBridge: true,
       proactiveRefresh: true,
-      proxyMode: 'auto',
     })
+    expect(CodexProvider.Config({}).proxyMode.get()).toBe('auto')
     expect(CodexProvider.resolveConfig({})).toMatchObject({
       credentialRef: 'OPENAI_CODEX_OAUTH',
       transport: 'sse',
