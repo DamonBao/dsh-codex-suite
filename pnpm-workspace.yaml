@@ -103,4 +103,5 @@ minimumReleaseAgeExclude:
   - '@deepseek-ai/dsh-package-manifest@0.1.7-rc.1'
   - '@deepseek-ai/cordis-plugin-timer@1.1.6'
   - '@deepseek-ai/dsh-cmdline@0.1.7-rc.1'
+  - '@deepseek-ai/dsh-util-workspace-path@0.1.7-rc.1'
   - '@deepseek-ai/dsh-hmr@0.1.7-rc.1'
