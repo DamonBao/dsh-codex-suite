@@ -179,6 +179,16 @@ jobs:
           test -f "$SUITE/cordis.patch.yml"
           test ! -e "$SUITE/lib"
 
+          node --input-type=module <<'EOF'
+          import { readFileSync } from 'node:fs'
+
+          for (const name of ['dsh-codex-provider', 'dsh-conversation-ui']) {
+            const manifest = JSON.parse(readFileSync(`node_modules/@jcy2387/${name}/package.json`, 'utf8'))
+            const bundled = Object.keys(manifest.dependencies ?? {}).filter(dependency => dependency.startsWith('@deepseek-ai/dsh-'))
+            if (bundled.length > 0) throw new Error(`${name} bundles DSH runtime packages: ${bundled.join(', ')}`)
+          }
+          EOF
+
       - name: Import every Node-side entry point
         working-directory: consumer
         shell: bash

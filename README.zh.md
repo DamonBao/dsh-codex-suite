@@ -7,7 +7,7 @@
 
 [English](README.md) | 简体中文
 
-为 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)（DSH）打造的插件套件：把 **ChatGPT / OpenAI Codex 模型**和 **Codex 风格的对话体验**带进 DSH Web UI。基于 DSH `0.1.7-rc.1` 构建（peer 范围 `>=0.1.7-rc.1 <0.1.8-0`）。
+为 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)（DSH）打造的插件套件：把 **ChatGPT / OpenAI Codex 模型**和 **Codex 风格的对话体验**带进 DSH Web UI。基于 DSH `0.1.7-rc.2` 构建（peer 范围 `>=0.1.7-rc.1 <0.1.8-0`）。
 
 本仓库是 pnpm monorepo，包含两个相互独立的运行时插件和一个纯组合包：
 
@@ -56,15 +56,15 @@
 **安装整套 Suite（推荐）：**
 
 ```sh
-dsh plugin --profile web add @jcy2387/dsh-suite@0.1.7-rc.1
+dsh plugin --profile web add @jcy2387/dsh-suite@0.1.7-rc.2
 dsh web
 ```
 
 **或单独安装插件：**
 
 ```sh
-dsh plugin --profile web add @jcy2387/dsh-codex-provider@0.1.7-rc.1
-dsh plugin --profile web add @jcy2387/dsh-conversation-ui@0.1.7-rc.1
+dsh plugin --profile web add @jcy2387/dsh-codex-provider@0.1.7-rc.2
+dsh plugin --profile web add @jcy2387/dsh-conversation-ui@0.1.7-rc.2
 dsh web
 ```
 
@@ -136,6 +136,10 @@ dsh web
 两半之间只通过两条窄通道通信：注入到 HTML 的**启动配置全局变量**（`window.__DSH_CONVERSATION_UI_CONFIG__`）把校验后的插件配置带给浏览器；**经鉴权的 Connection RPC** 把设置读写带回 Host。机密信息（令牌、代理地址）绝不跨越 RPC 边界。
 
 各包详细文档：[codex-provider](packages/codex-provider/README.zh.md) · [conversation-ui](packages/conversation-ui/README.md) · [suite](packages/all/README.md)
+
+## DSH 0.1.7-rc.2 启动兼容
+
+使用 DSH `0.1.7-rc.2` 时，将 Suite 升级到 `0.1.7-rc.2`。Suite `0.1.7-rc.1` 会在宿主旁安装旧版 `dsh-settings`；新版宿主会禁用这个不兼容的副本，导致 Codex Provider 一直等待设置服务。新版 Suite 改用宿主提供的设置服务。更新插件后重启 DSH。
 
 ## 升级到 DSH 0.1.7-rc.1
 
