@@ -135,4 +135,4 @@ See the [monorepo README](../../README.md) for workspace-wide commands.
 
 [MIT](LICENSE) © jcy2387
 
-This release targets DSH `0.1.7-rc.1`. It imports `openai-codex.proxyMode` from `settings.yaml` or `settings.yaml.imported` into the active profile’s `cordis.patch.yml`, recording a marker after success and retaining the source after failure. The plugin’s compatibility import fills only missing values. Exported `locale/en.json` and `locale/zh.json` localize the name and description in DSH.
+This release targets DSH `0.1.7-rc.2`. It imports `openai-codex.proxyMode` from `settings.yaml` or `settings.yaml.imported` into the active profile’s `cordis.patch.yml`, recording a marker after success and retaining the source after failure. The plugin’s compatibility import fills only missing values. Exported `locale/en.json` and `locale/zh.json` localize the name and description in DSH.
