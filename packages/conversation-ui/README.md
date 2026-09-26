@@ -53,7 +53,7 @@ DeepSeek Harness（DSH）的 Codex 风格对话界面增强插件：把 Web 对�
 已发布版本：
 
 ```sh
-dsh plugin --profile web add @jcy2387/dsh-conversation-ui@0.1.7-rc.2
+dsh plugin --profile web add @jcy2387/dsh-conversation-ui@0.1.7-rc.3
 dsh web
 ```
 

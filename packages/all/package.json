@@ -2,7 +2,7 @@
   "name": "@jcy2387/dsh-suite",
   "displayName": "DSH Codex Suite",
   "description": "Use ChatGPT accounts with Codex models and a Codex-style conversation view.",
-  "version": "0.1.7-rc.2",
+  "version": "0.1.7-rc.3",
   "author": "jcy2387",
   "type": "module",
   "packageManager": "pnpm@11.7.0",
