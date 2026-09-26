@@ -213,6 +213,7 @@ export const TypewriterAssistantNodeView = memo(function TypewriterAssistantNode
   maxScrollSpeedPxPerSec = DEFAULT_CONVERSATION_CONFIG.maxScrollSpeedPxPerSec,
   thinkAutoExpand = DEFAULT_CONVERSATION_SETTINGS.thinkAutoExpand,
   node,
+  groupPart,
   turnProcess,
   useTurnData,
   useSession,
@@ -260,9 +261,20 @@ export const TypewriterAssistantNodeView = memo(function TypewriterAssistantNode
     code: { copyLabel: t('copy'), copiedLabel: t('copied') },
     footnotes: t('markdown.footnotes'),
   }), [t])
+  // rc.2 Chat grouping can render one assistant-step node as multiple grouped
+  // rows (a reasoning row and a response row); each row must render only its
+  // own part, exactly like the native renderer's block filter.
+  const blocks = useMemo(
+    () => groupPart === 'reasoning'
+      ? data.blocks.filter(block => block.kind === 'reasoning')
+      : groupPart === 'response'
+        ? data.blocks.filter(block => block.kind !== 'reasoning')
+        : data.blocks,
+    [data.blocks, groupPart],
+  )
   const hasVisible = streaming
     || data.status === 'interrupted'
-    || data.blocks.some(block => block.kind !== 'tool-call')
+    || blocks.some(block => block.kind !== 'tool-call')
   const fallbackControl = ownsFallbackProcessControl(node, turnProcess, fallbackGate)
   const fallbackMember = isFallbackProcessMember(node, turnProcess, fallbackGate)
   const processCollapsible = turnProcess?.foldable === true || fallbackControl
@@ -280,14 +292,28 @@ export const TypewriterAssistantNodeView = memo(function TypewriterAssistantNode
   if (!hasVisible) return null
 
   const rendered: ReactNode[] = []
-  const last = data.blocks.length - 1
+  const last = blocks.length - 1
   let lastFollow = -1
-  for (let index = 0; index < data.blocks.length; index += 1) {
-    const kind = data.blocks[index]?.kind
+  for (let index = 0; index < blocks.length; index += 1) {
+    const kind = blocks[index]?.kind
     if (kind === 'text' || kind === 'reasoning') lastFollow = index
   }
-  for (let index = 0; index < data.blocks.length; index += 1) {
-    const block = data.blocks[index]
+  // Only the row holding the node's newest prose owns the live follow, so a
+  // split reasoning row never races the response row for the scroll tail.
+  let nodeTailBlock: (typeof data.blocks)[number] | undefined
+  for (let index = data.blocks.length - 1; index >= 0; index -= 1) {
+    const kind = data.blocks[index]?.kind
+    if (kind === 'text' || kind === 'reasoning') {
+      nodeTailBlock = data.blocks[index]
+      break
+    }
+  }
+  const followsTail = lastFollow >= 0 && lastFollow === last && blocks[lastFollow] === nodeTailBlock
+  const stoppedHere = data.status === 'interrupted'
+    && (groupPart === undefined || groupPart === 'response'
+      || !data.blocks.some(block => block !== undefined && block.kind !== 'reasoning' && block.kind !== 'tool-call'))
+  for (let index = 0; index < blocks.length; index += 1) {
+    const block = blocks[index]
     if (block === undefined) continue
     switch (block.kind) {
       case 'text':
@@ -333,8 +359,8 @@ export const TypewriterAssistantNodeView = memo(function TypewriterAssistantNode
       case 'image': {
         const start = index
         const group = [block]
-        while (index + 1 < data.blocks.length) {
-          const next = data.blocks[index + 1]
+        while (index + 1 < blocks.length) {
+          const next = blocks[index + 1]
           if (next === undefined || next.kind !== 'image') break
           group.push(next)
           index += 1
@@ -368,14 +394,14 @@ export const TypewriterAssistantNodeView = memo(function TypewriterAssistantNode
       data-streaming={streaming || undefined}
     >
       <FollowHost
-        active={streaming && !reducedMotion}
+        active={streaming && !reducedMotion && followsTail}
         speedCpsRef={rootSpeedRef}
         minSpeedPxPerSec={scrollSpeedPxPerSec}
         maxSpeedPxPerSec={maxScrollSpeedPxPerSec}
       >
         <div className={css.body}>
           {rendered}
-          {data.status === 'interrupted' && <span className={css.stopped}>{t('message.stopped')}</span>}
+          {stoppedHere && <span className={css.stopped}>{t('message.stopped')}</span>}
         </div>
       </FollowHost>
     </div>

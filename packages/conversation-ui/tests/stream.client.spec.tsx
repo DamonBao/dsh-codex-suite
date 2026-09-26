@@ -615,6 +615,76 @@ describe('assistant renderer', () => {
     expect(view.container.querySelectorAll('[aria-live="polite"]')).toHaveLength(1)
   })
 
+  it('renders each rc.2 grouped row once instead of duplicating the reply', () => {
+    const blocks = [
+      { kind: 'reasoning', text: 'private verification' },
+      { kind: 'text', text: 'the final answer' },
+    ]
+    const reasoningRow = render(<TypewriterAssistantNodeView
+      {...assistantProps('settled', blocks)}
+      groupPart="reasoning"
+    />)
+    expect(reasoningRow.container.textContent).toContain('private verification')
+    expect(reasoningRow.container.textContent).not.toContain('the final answer')
+
+    const responseRow = render(<TypewriterAssistantNodeView
+      {...assistantProps('settled', blocks)}
+      groupPart="response"
+    />)
+    expect(responseRow.container.textContent).toContain('the final answer')
+    expect(responseRow.container.textContent).not.toContain('private verification')
+
+    // Ungrouped mounts (older DSH, direct composition) keep the whole node.
+    const whole = render(<TypewriterAssistantNodeView {...assistantProps('settled', blocks)} />)
+    expect(whole.container.textContent).toContain('private verification')
+    expect(whole.container.textContent).toContain('the final answer')
+  })
+
+  it('keeps live follow on the grouped row that owns the newest prose', () => {
+    const blocks = [
+      { kind: 'reasoning', text: 'still thinking' },
+      { kind: 'text', text: 'streaming answer' },
+    ]
+    const reasoningRow = render(<TypewriterAssistantNodeView
+      {...assistantProps('running', blocks)}
+      groupPart="reasoning"
+    />)
+    expect(reasoningRow.container.querySelector(`.${css.follow}[data-stream-follow]`)).toBeNull()
+
+    const responseRow = render(<TypewriterAssistantNodeView
+      {...assistantProps('running', blocks)}
+      groupPart="response"
+    />)
+    expect(responseRow.container.querySelector(`.${css.follow}[data-stream-follow]`)).not.toBeNull()
+  })
+
+  it('shows the stopped marker once on the row owning an interrupted reply', () => {
+    const blocks = [
+      { kind: 'reasoning', text: 'interrupted thought' },
+      { kind: 'text', text: 'partial answer' },
+    ]
+    const base = assistantProps('settled', blocks)
+    const interrupted = {
+      ...base,
+      node: { ...base.node, data: { ...base.node.data, status: 'interrupted' } },
+    } as typeof base
+    const reasoningRow = render(<TypewriterAssistantNodeView {...interrupted} groupPart="reasoning" />)
+    expect(reasoningRow.container.textContent).toContain('interrupted thought')
+    expect(reasoningRow.container.querySelector(`.${css.stopped}`)).toBeNull()
+
+    const responseRow = render(<TypewriterAssistantNodeView {...interrupted} groupPart="response" />)
+    expect(responseRow.container.querySelectorAll(`.${css.stopped}`)).toHaveLength(1)
+
+    // A reasoning-only interrupted node keeps its marker on the reasoning row.
+    const reasoningOnlyBase = assistantProps('settled', [blocks[0]])
+    const reasoningOnly = {
+      ...reasoningOnlyBase,
+      node: { ...reasoningOnlyBase.node, data: { ...reasoningOnlyBase.node.data, status: 'interrupted' } },
+    } as typeof reasoningOnlyBase
+    const reasoningOnlyRow = render(<TypewriterAssistantNodeView {...reasoningOnly} groupPart="reasoning" />)
+    expect(reasoningOnlyRow.container.querySelectorAll(`.${css.stopped}`)).toHaveLength(1)
+  })
+
   it('leaves DSH session scroll restoration and follow state untouched', async () => {
     const block = { kind: 'text', text: 'line one\n\nline two' }
     const view = render(
