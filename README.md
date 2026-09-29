@@ -7,7 +7,7 @@
 
 English | [简体中文](README.zh.md)
 
-A suite of [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) (DSH) plugins that brings **ChatGPT/OpenAI Codex models** and a **Codex-style conversation experience** to the DSH Web UI. Built against DSH `0.1.7-rc.2` (peer range `>=0.1.7-rc.1 <0.1.8-0`).
+A suite of [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) (DSH) plugins that brings **ChatGPT/OpenAI Codex models** and a **Codex-style conversation experience** to the DSH Web UI. Built against DSH `0.2.0-rc.2` (peer range `>=0.2.0-rc.2 <0.3.0-0`).
 
 The repository is a pnpm monorepo containing two independent runtime plugins and one pure bundle package:
 
@@ -51,20 +51,20 @@ The manifest declares a packaged SVG with `icon: "./icon.svg"`. The suite and bo
 
 ## Installation
 
-Prerequisites: DeepSeek Harness (`dsh`) `>=0.1.7-rc.1 <0.1.8-0` with the `web` profile, Node.js `^22.19 || >=24`, pnpm 11.
+Prerequisites: DeepSeek Harness (`dsh`) `>=0.2.0-rc.2 <0.3.0-0` with the `web` profile, Node.js `^22.19 || >=24`, pnpm 11.
 
 **Install the whole suite (recommended):**
 
 ```sh
-dsh plugin --profile web add @jcy2387/dsh-suite@0.1.7-rc.2.1
+dsh plugin --profile web add @jcy2387/dsh-suite@0.2.0-rc.2
 dsh web
 ```
 
 **Or install plugins individually:**
 
 ```sh
-dsh plugin --profile web add @jcy2387/dsh-codex-provider@0.1.7-rc.2.1
-dsh plugin --profile web add @jcy2387/dsh-conversation-ui@0.1.7-rc.2.1
+dsh plugin --profile web add @jcy2387/dsh-codex-provider@0.2.0-rc.2
+dsh plugin --profile web add @jcy2387/dsh-conversation-ui@0.2.0-rc.2
 dsh web
 ```
 
@@ -136,6 +136,10 @@ Each runtime plugin ships two halves:
 The halves communicate through two narrow channels: an inline **boot-config global** (`window.__DSH_CONVERSATION_UI_CONFIG__`) injected into the served HTML carries validated plugin config to the browser, and the **authenticated Connection RPC** carries settings reads/writes back to the Host. Secrets (tokens, proxy URLs) never cross the RPC boundary.
 
 Package-level docs: [codex-provider](packages/codex-provider/README.md) · [conversation-ui](packages/conversation-ui/README.en.md) · [suite](packages/all/README.md)
+
+## DSH 0.2.0-rc.2 compatibility
+
+The provider uses pi-ai `0.87.1`, matching the DSH adapter. The Conversation UI uses DSH 0.2's localized duration units and Turn label, so elapsed times remain readable in English and Chinese. The provider, Conversation UI, and Suite were booted together with the Models and Logistics plugins in an isolated DSH `0.2.0-rc.2` Web profile; all three plugin settings pages rendered without browser console errors. Restart DSH after replacing an older plugin version.
 
 ## DSH 0.1.7-rc.2 startup
 

@@ -98,10 +98,11 @@ function assistantProps(
     useTurnData: () => closing && finalNode !== undefined ? { closing: { finalNode } } : undefined,
     openFile: () => {},
     fileMentions: () => undefined,
-    t: (key: string, parameters?: Record<string, unknown>) => {
-      if (key === 'duration.minutes') return `${parameters?.minutes}分${parameters?.seconds}秒`
-      if (key === 'duration.seconds') return `${parameters?.seconds}秒`
-      if (key === 'message.turnProcess.took') return `用时 ${parameters?.duration}`
+    t: (key: string) => {
+      if (key === 'duration.hourUnit') return '小时'
+      if (key === 'duration.minuteUnit') return '分'
+      if (key === 'duration.secondUnit') return '秒'
+      if (key === 'message.turnProcess.took') return '已完成，用时 '
       return key
     },
   } as unknown as Parameters<typeof TypewriterAssistantNodeView>[0]
