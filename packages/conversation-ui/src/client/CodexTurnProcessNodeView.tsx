@@ -17,40 +17,6 @@ import css from './TypewriterAssistantNodeView.module.css'
 
 type TurnProcessT = ChatNodeViewProps<'turn-process'>['t']
 
-function processSummary(
-  counts: { messageCount: number; toolCallCount: number; subagentCount: number },
-  t: TurnProcessT,
-): string {
-  const labels: string[] = []
-  if (counts.toolCallCount > 0) {
-    labels.push(t(
-      counts.toolCallCount === 1
-        ? 'message.turnProcess.toolCalls.one'
-        : 'message.turnProcess.toolCalls.other',
-      { count: counts.toolCallCount },
-    ))
-  }
-  if (counts.messageCount > 0) {
-    labels.push(t(
-      counts.messageCount === 1
-        ? 'message.turnProcess.messages.one'
-        : 'message.turnProcess.messages.other',
-      { count: counts.messageCount },
-    ))
-  }
-  if (counts.subagentCount > 0) {
-    labels.push(t(
-      counts.subagentCount === 1
-        ? 'message.turnProcess.subagents.one'
-        : 'message.turnProcess.subagents.other',
-      { count: counts.subagentCount },
-    ))
-  }
-  return labels.length === 0
-    ? t('message.turnProcess.thoughtForAWhile')
-    : labels.join(t('message.turnProcess.separator'))
-}
-
 /** Shared Codex disclosure button for native and paginated-history fallback seats. */
 export function CodexTurnProcessControl({
   turn,
@@ -58,6 +24,8 @@ export function CodexTurnProcessControl({
   toolCallCount,
   subagentCount,
   elapsedMs,
+  reason,
+  canCollapse,
   turnProcess,
   t,
   fallback = false,
@@ -68,40 +36,51 @@ export function CodexTurnProcessControl({
   readonly toolCallCount: number
   readonly subagentCount: number
   readonly elapsedMs?: number | undefined
+  readonly reason?: string | undefined
+  readonly canCollapse: boolean
   readonly turnProcess: TurnProcessOwnerProps
   readonly t: TurnProcessT
   readonly fallback?: boolean
   readonly rootRef?: Ref<HTMLDivElement> | undefined
 }) {
-  const label = elapsedMs === undefined
-    ? processSummary({ messageCount, toolCallCount, subagentCount }, t)
-    : formatTurnElapsed(Math.max(0, elapsedMs), t)
+  const label = reason === 'aborted' ? t('message.stopped')
+    : reason === 'error' ? t('message.turnProcess.failed')
+      : elapsedMs === undefined ? t('message.turnProcess.worked')
+        : formatTurnElapsed(Math.max(1_000, elapsedMs), t)
+  const announcement = reason === 'aborted' ? t('message.stopped')
+    : reason === 'error' ? t('message.turnProcess.failed')
+      : t('message.turnProcess.worked')
+  const open = !canCollapse || turnProcess.open
   return (
-    <div
-      ref={rootRef}
-      className={css.turnFoldRow}
-      data-turn-fold-row=""
-      data-turn-fold-state="completed"
-      data-turn-process-fallback={fallback || undefined}
-    >
-      <button
-        type="button"
-        className={css.turnFoldButton}
-        data-open={turnProcess.open || undefined}
-        data-turn-process={turn}
-        data-turn-process-messages={messageCount}
-        data-turn-process-tool-calls={toolCallCount}
-        data-turn-process-subagents={subagentCount}
-        aria-expanded={turnProcess.open}
-        onClick={(event) => {
-          event.currentTarget.focus()
-          turnProcess.setOpen(!turnProcess.open)
-        }}
+    <>
+      <span className={css.visuallyHidden} role="status" aria-live="polite" aria-atomic="true">{announcement}</span>
+      <div
+        ref={rootRef}
+        className={css.turnFoldRow}
+        data-turn-fold-row=""
+        data-turn-fold-state={reason === 'aborted' ? 'stopped' : reason === 'error' ? 'failed' : 'completed'}
+        data-turn-process-fallback={fallback || undefined}
       >
-        <span>{label}</span>
-        {turnProcess.open ? <IconChevronDownOutlineMedium /> : <IconChevronRightOutlineMedium />}
-      </button>
-    </div>
+        <button
+          type="button"
+          className={css.turnFoldButton}
+          data-open={open || undefined}
+          data-turn-process={turn}
+          data-turn-process-messages={messageCount}
+          data-turn-process-tool-calls={toolCallCount}
+          data-turn-process-subagents={subagentCount}
+          disabled={!canCollapse}
+          aria-expanded={turnProcess.hasContent || fallback ? open : undefined}
+          onClick={(event) => {
+            event.currentTarget.focus()
+            turnProcess.setOpen(!open)
+          }}
+        >
+          <span>{label}</span>
+          {canCollapse && (open ? <IconChevronDownOutlineMedium /> : <IconChevronRightOutlineMedium />)}
+        </button>
+      </div>
+    </>
   )
 }
 
@@ -121,9 +100,12 @@ export const CodexTurnProcessNodeView = memo(function CodexTurnProcessNodeView({
     processStartLoaded: loadedProcessStart(node, turnProcess),
   })
   const seatRef = useChatSeatVisible(fallback)
-  if (!turnProcess.foldable && !fallback) return null
   const location = node.location
   const turn = location.kind === 'turn' || location.kind === 'step' ? location.turn : undefined
+  if (turn?.status !== 'closed') return null
+  const reason = turn.end?.data.reason.kind
+  const canCollapse = (turnProcess.foldable && turnProcess.hasContent
+    && reason !== 'aborted' && reason !== 'error') || fallback
   const elapsedMs = turn?.start !== undefined && turn.end !== undefined
     ? turn.end.time - turn.start.time
     : undefined
@@ -134,6 +116,8 @@ export const CodexTurnProcessNodeView = memo(function CodexTurnProcessNodeView({
       toolCallCount={node.data.toolCallCount}
       subagentCount={node.data.subagentCount}
       elapsedMs={elapsedMs}
+      reason={reason}
+      canCollapse={canCollapse}
       turnProcess={turnProcess}
       t={t}
       fallback={fallback}

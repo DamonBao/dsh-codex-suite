@@ -15,9 +15,10 @@ A Codex-style conversation UI enhancement plugin for DeepSeek Harness (DSH): the
 
 ### Event stream and turn structure
 
-- **Instant turn feedback:** an elapsed timer and a thinking placeholder appear the moment you submit — no more staring at a blank screen.
+- **Instant turn feedback:** the native DSH running status and elapsed clock appear after submission, with one localized status throughout the turn.
 - **Process vs. answer:** each turn's process content (Think, tools, retries…) is grouped into its own section; once the final answer lands successfully, the process section **auto-collapses** and stays expandable by hand.
 - **Natural ordering:** Think, Tool, Retry, Workflow, Compaction, Command, and context-injection rows keep their real order instead of being regrouped away.
+- **Markdown images:** local absolute-path images in assistant replies use DSH's authenticated file route.
 
 ### Semantic tool activity
 
@@ -35,7 +36,7 @@ A Codex-style conversation UI enhancement plugin for DeepSeek Harness (DSH): the
 
 ### Streaming viewport cooperation
 
-- Current DSH `ChatView` exclusively owns per-session restoration, bottom-follow, and reader unpinning. The plugin no longer writes `scrollTop` or row transforms, avoiding ownership races during session switches.
+- Current DSH `ChatView` exclusively owns the running status, per-session restoration, bottom-follow, and reader unpinning. The plugin no longer adds a second waiting row or writes `scrollTop` and row transforms.
 - Respects `prefers-reduced-motion`; when the frame rate degrades, an FPS guard skips DOM commits for offscreen replies so visible frames stay fluid.
 
 ### Deliverables card

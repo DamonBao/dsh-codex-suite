@@ -7,6 +7,7 @@ const INDEPENDENT_KINDS: ReadonlySet<string> = new Set([
   'system-prompt',
   'user',
   'steering',
+  'turn-trigger',
   'turn-process',
   'turn-error',
   'turn-max-tokens',

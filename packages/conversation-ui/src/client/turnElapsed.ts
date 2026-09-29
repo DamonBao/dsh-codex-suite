@@ -21,10 +21,3 @@ export function formatTurnElapsed(ms: number, t: TurnElapsedTranslator): string 
   // native conversation translation unchanged.
   return `${label === '已完成，用时 ' ? '耗时 ' : label}${duration}`
 }
-
-export function formatTurnProcessed(ms: number, t: TurnElapsedTranslator): string {
-  const duration = formatRunDuration(ms, t)
-  const label = t('message.turnProcess.took')
-  // Keep the native duration grammar and only replace the Chinese state word.
-  return `${label === '已完成，用时 ' ? '已处理 ' : label}${duration}`
-}

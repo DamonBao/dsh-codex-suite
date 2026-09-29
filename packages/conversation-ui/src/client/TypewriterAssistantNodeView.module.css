@@ -109,38 +109,6 @@
   line-height: 24px;
 }
 
-.turnPrelude {
-  margin-block-start: 16px;
-}
-
-.turnWaiting {
-  width: fit-content;
-  margin-block-start: 0;
-  background: linear-gradient(
-    105deg,
-    var(--dsw-alias-label-tertiary) 15%,
-    var(--dsw-alias-label-primary) 42%,
-    var(--dsw-alias-label-tertiary) 68%
-  );
-  background-clip: text;
-  background-size: 220% 100%;
-  color: transparent;
-  font-size: 14px;
-  line-height: 24px;
-  animation: dsh-turn-waiting-shimmer 1.8s linear infinite;
-}
-
-@keyframes dsh-turn-waiting-shimmer {
-  from { background-position: 130% 0; }
-  to { background-position: -90% 0; }
-}
-
-/* Light Stream owns the immediate Turn status. The native direct-child
- * placeholder would otherwise duplicate the waiting signal at the flow tip. */
-:global([data-chat-flow] > [role='status']) {
-  display: none !important;
-}
-
 .turnFoldRow::after {
   width: 100%;
   height: 1px;
@@ -149,8 +117,7 @@
   content: '';
 }
 
-.turnFoldButton,
-.turnFoldLabel {
+.turnFoldButton {
   display: inline-flex;
   align-items: center;
   align-self: flex-start;
@@ -170,6 +137,11 @@
 
 .turnFoldButton:hover {
   color: var(--dsw-alias-label-primary);
+}
+
+.turnFoldButton:disabled {
+  color: inherit;
+  cursor: default;
 }
 
 .turnFoldButton:focus-visible {
@@ -1200,12 +1172,6 @@
     > :global([data-slot='tool.call.toolview'])
     > *
     > :global([data-sample='bash'])::after {
-    animation: none;
-  }
-
-  .turnWaiting {
-    background: none;
-    color: var(--dsw-alias-label-secondary);
     animation: none;
   }
 

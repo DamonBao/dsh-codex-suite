@@ -30,7 +30,6 @@ import {
   toolActivityGroup,
   wrapFollowNodeView,
 } from '../src/client/TypewriterToolNodeView.tsx'
-import { wrapTurnPreludeNodeView } from '../src/client/TurnPreludeUserNodeView.tsx'
 import { DeliverablesCard, DeliverablesTail } from '../src/client/DeliverablesCard.tsx'
 import { DELIVERABLES_DATA_KEY, deliverablesDefinition, selectDeliverables } from '../src/client/deliverables.ts'
 import { DEFAULT_CONVERSATION_CONFIG, CONVERSATION_BOOT_GLOBAL } from '../src/config.ts'
@@ -103,6 +102,9 @@ function assistantProps(
       if (key === 'duration.minuteUnit') return '分'
       if (key === 'duration.secondUnit') return '秒'
       if (key === 'message.turnProcess.took') return '已完成，用时 '
+      if (key === 'message.turnProcess.worked') return '已处理'
+      if (key === 'message.turnProcess.failed') return '运行失败'
+      if (key === 'message.stopped') return '已停止'
       return key
     },
   } as unknown as Parameters<typeof TypewriterAssistantNodeView>[0]
@@ -123,14 +125,15 @@ const PROCESS_SPEC = {
 function turnProcessProps(turnProcess: {
   readonly spec: typeof PROCESS_SPEC
   readonly foldable: boolean
+  readonly hasContent: boolean
   readonly open: boolean
   readonly setOpen: (open: boolean) => void
-}): Parameters<typeof CodexTurnProcessNodeView>[0] {
+}, options: { reason?: 'completed' | 'aborted' | 'error'; start?: boolean; closed?: boolean } = {}): Parameters<typeof CodexTurnProcessNodeView>[0] {
   const turn = {
     turn: 1,
-    status: 'closed',
-    start: { seq: 3, time: 1_000 },
-    end: { time: 1_112_000, data: { reason: { kind: 'completed' } } },
+    status: options.closed === false ? 'open' : 'closed',
+    start: options.start === false ? undefined : { seq: 3, time: 1_000 },
+    end: options.closed === false ? undefined : { time: 1_112_000, data: { reason: { kind: options.reason ?? 'completed' } } },
   }
   return {
     node: {
@@ -238,6 +241,16 @@ describe('assistant renderer', () => {
     expect(view.container.textContent).not.toContain('▍')
   })
 
+  it('renders a local Markdown image through the DSH file route', () => {
+    const view = render(<TypewriterAssistantNodeView {...assistantProps('settled', [
+      { kind: 'text', text: '![diagram](/workspace/report%20diagram.png)' },
+    ])} />)
+    const image = view.container.querySelector('img')
+    expect(image?.getAttribute('src')).toBe(
+      new URL('api/file?path=%2Fworkspace%2Freport%20diagram.png', document.baseURI).href,
+    )
+  })
+
   it('renders teleprompter mode from the latest model snapshot without an artificial reveal queue', () => {
     const view = render(<TypewriterAssistantNodeView
       {...assistantProps('running', [{ kind: 'text', text: 'start' }])}
@@ -279,6 +292,28 @@ describe('assistant renderer', () => {
     expect(toggle.getAttribute('aria-expanded')).toBe('false')
     fireEvent.click(toggle)
     expect(toggle.getAttribute('aria-expanded')).toBe('true')
+  })
+
+  it('retains the host Turn outcome when no process can collapse', () => {
+    const turnProcess = { hasContent: false, spec: PROCESS_SPEC, foldable: false, open: false, setOpen: vi.fn() }
+    const completed = render(<CodexTurnProcessNodeView {...turnProcessProps(turnProcess)} />)
+    const duration = completed.getByRole('button', { name: /耗时 18分31秒/ }) as HTMLButtonElement
+    expect(duration.disabled).toBe(true)
+    expect(duration.hasAttribute('aria-expanded')).toBe(false)
+
+    const stopped = render(<CodexTurnProcessNodeView {...turnProcessProps(turnProcess, { reason: 'aborted' })} />)
+    expect((stopped.getByRole('button', { name: '已停止' }) as HTMLButtonElement).disabled).toBe(true)
+    expect(stopped.container.querySelector('[data-turn-fold-state="stopped"]')).not.toBeNull()
+
+    const failed = render(<CodexTurnProcessNodeView {...turnProcessProps(turnProcess, { reason: 'error' })} />)
+    expect((failed.getByRole('button', { name: '运行失败' }) as HTMLButtonElement).disabled).toBe(true)
+    expect(failed.container.querySelector('[data-turn-fold-state="failed"]')).not.toBeNull()
+
+    const unknownDuration = render(<CodexTurnProcessNodeView {...turnProcessProps(turnProcess, { start: false })} />)
+    expect(unknownDuration.getByRole('button', { name: '已处理' })).not.toBeNull()
+
+    const running = render(<CodexTurnProcessNodeView {...turnProcessProps(turnProcess, { closed: false })} />)
+    expect(running.container.querySelector('button')).toBeNull()
   })
 
   it('uses native turnProcess for final-node reasoning and beforematch recovery', () => {
@@ -866,6 +901,29 @@ describe('Codex-style deliverables', () => {
 })
 
 describe('client plugin lifecycle', () => {
+  it('keeps native input and running status surfaces available', async () => {
+    function NativeInput() { return null }
+    const ctx = new Context()
+    await ctx.plugin(SlotRegistry).await()
+    ctx.slots.register({
+      name: 'root',
+      children: { 'conversation.chat.node': { kind: 'keyed', scope: 'session' } },
+    } as never, (() => null) as never)
+    for (const key of ['user', 'turn-trigger']) {
+      ctx.slots.register({ name: 'conversation.chat.node', key } as never, NativeInput as never)
+    }
+    const fiber = ctx.plugin({ inject: [...inject], apply })
+    await fiber.await()
+
+    for (const key of ['user', 'turn-trigger']) {
+      expect(ctx.slots.entries('conversation.chat.node').find(entry => entry.options.key === key)?.component)
+        .toBe(NativeInput)
+    }
+    const styleSheet = readFileSync('src/client/TypewriterAssistantNodeView.module.css', 'utf8')
+    expect(styleSheet).not.toContain("[data-chat-flow] > [role='status']")
+    await fiber.dispose()
+  })
+
   it('shadows Assistant and native Turn control without wrapping the native control', async () => {
     expect(inject).toEqual(['slots'])
     function NativeTurnProcess() { return null }
@@ -1195,68 +1253,6 @@ describe('isGrowingChatNode', () => {
     const done = render(<Wrapped node={{ kind: 'tool-call', data: { root: { kind: 'tool-result', callId: '1' } } }} />)
     expect(done.container.querySelector('[data-stream-node="tool-call"][data-stream-state="settled"]')).not.toBeNull()
     expect(done.container.textContent).toBe('done')
-  })
-})
-
-describe('Turn prelude', () => {
-  beforeEach(() => vi.useFakeTimers({ toFake: [...FAKE] }))
-
-  it('shows a running-only processed clock before process output exists', async () => {
-    vi.setSystemTime(new Date(10_000))
-    function UserFixture() {
-      return <div>the user question</div>
-    }
-    const WrappedUser = wrapTurnPreludeNodeView(UserFixture)
-    const turn = { turn: 4, status: 'open', start: { time: 10_000 } }
-    const userNode = {
-      key: 'user-waiting-1',
-      kind: 'user',
-      location: { kind: 'turn', turn },
-      data: { kind: 'user', seq: 10, time: 10_000 },
-    }
-    const view = render(<WrappedUser node={userNode} t={assistantProps('running', []).t} />)
-    const row = view.container.querySelector('[data-turn-fold-state="running"]') as HTMLElement
-    expect(row.textContent).toContain('已处理 0秒')
-    expect(view.getByText('思考中')).not.toBeNull()
-    expect(view.container.querySelector('[data-turn-process]')).toBeNull()
-    await act(() => vi.advanceTimersByTimeAsync(1_000))
-    expect(row.textContent).toContain('已处理 1秒')
-  })
-
-  it('hides the waiting placeholder after Chat publishes process output and removes the prelude when closed', () => {
-    function UserFixture() {
-      return <div>the user question</div>
-    }
-    const WrappedUser = wrapTurnPreludeNodeView(UserFixture)
-    const openTurn = { turn: 4, status: 'open', start: { time: 20_000 } }
-    const closedTurn = { ...openTurn, status: 'closed', end: { time: 23_000 } }
-    const userNode = {
-      key: 'user-waiting-2',
-      kind: 'user',
-      location: { kind: 'turn', turn: openTurn },
-      data: { kind: 'user', seq: 20, time: 20_000 },
-    }
-    const toolNode = {
-      key: 'tool-waiting-2',
-      kind: 'tool-call',
-      location: { kind: 'step', turn: openTurn, step: { step: 1 } },
-      data: { root: { callId: 'call-waiting-2', name: 'read_file' } },
-    }
-    const chat = {
-      order: [userNode.key, toolNode.key],
-      nodes: { get: (key: string) => key === userNode.key ? userNode : toolNode },
-    }
-    const useChat = (selector: (value: typeof chat) => unknown) => selector(chat)
-    const view = render(<WrappedUser node={userNode} useChat={useChat} t={assistantProps('running', []).t} />)
-    expect(view.queryByText('思考中')).toBeNull()
-    expect(view.container.querySelector('[data-turn-fold-state="running"]')).not.toBeNull()
-
-    view.rerender(<WrappedUser
-      node={{ ...userNode, location: { kind: 'turn', turn: closedTurn } }}
-      useChat={useChat}
-      t={assistantProps('running', []).t}
-    />)
-    expect(view.container.querySelector('[data-turn-prelude]')).toBeNull()
   })
 })
 

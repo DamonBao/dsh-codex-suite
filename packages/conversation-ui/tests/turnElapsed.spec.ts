@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
   formatTurnElapsed,
-  formatTurnProcessed,
   type TurnElapsedTranslator,
 } from '../src/client/turnElapsed.ts'
 
@@ -18,6 +17,5 @@ const en: TurnElapsedTranslator = key => {
 describe('elapsed Turn labels', () => {
   it('uses DSH 0.2 duration units in English', () => {
     expect(formatTurnElapsed(61_000, en)).toBe('Completed in 1m 1s')
-    expect(formatTurnProcessed(3_661_000, en)).toBe('Completed in 1h 1m 1s')
   })
 })

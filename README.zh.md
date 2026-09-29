@@ -37,10 +37,10 @@
 **Conversation UI —— 像 Codex CLI 一样渲染对话**
 
 - **单一有序事件流。** 过程答复、思考、工具调用、重试、工作流、压缩和命令按自然顺序在各自 Turn 内呈现。
-- **Turn 折叠。** Turn 开始即显示计时与思考占位；最终答复落地后过程区自动折叠（可展开，并提供持久化的「自动展开思考」偏好）。
+- **Turn 折叠。** DSH 原生显示运行状态和计时；最终答复落地后过程区自动折叠（可展开，并提供持久化的「自动展开思考」偏好）。
 - **语义化工具图标。** 搜索、文件读写、Shell、数据库、网页、技能、Agent 等工具各有专属图标，活动一眼可扫。
 - **两种揭示模式。** `teleprompter`（默认）：即时快照向上平滑滑动；`typewriter`：按字素渐进揭示。三档平滑预设（`realtime` / `balanced` / `silky`）调节节奏。
-- **智能视口跟随。** 新内容在限速范围内平滑跟随；用户上滑阅读即释放跟随，回到底部自动恢复。尊重 `prefers-reduced-motion`，低帧率下优雅降级。
+- **原生视口跟随。** DSH 负责滚动位置恢复和底部跟随，插件负责平滑显示文字；尊重 `prefers-reduced-motion`，低帧率时减少屏幕外更新。
 - **产物卡片。** 每个完成的 Turn 列出生成的文件与站点，并附带增删行数。
 
 ---
@@ -139,7 +139,7 @@ dsh web
 
 ## DSH 0.2.0-rc.2 兼容
 
-Provider 使用与 DSH 适配器一致的 pi-ai `0.87.1`。Conversation UI 改用 DSH 0.2 的本地化时长单位和 Turn 文案，中英文耗时显示保持正常。Provider、Conversation UI、Suite 已与 Models、Logistics 插件一起在隔离的 DSH `0.2.0-rc.2` Web profile 中启动，三个插件设置页均可呈现，浏览器控制台无错误。替换旧版插件后重启 DSH。
+Provider 使用与 DSH 适配器一致的 pi-ai `0.87.1`。Conversation UI 将运行状态和滚动交给 DSH 0.2，已结束的 Turn 使用其本地化时长单位，并正确显示停止和失败状态。Provider、Conversation UI、Suite 已与 Models、Logistics 插件一起在隔离的 DSH `0.2.0-rc.2` Web profile 中启动，三个插件设置页均可呈现，浏览器控制台无错误。替换旧版插件后重启 DSH。
 
 ## DSH 0.1.7-rc.2 启动兼容
 
