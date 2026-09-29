@@ -7,7 +7,7 @@
 
 English | [简体中文](README.zh.md)
 
-A suite of [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) (DSH) plugins that brings **ChatGPT/OpenAI Codex models** and a **Codex-style conversation experience** to the DSH Web UI. Built against DSH `0.1.7-rc.2` (peer range `>=0.1.7-rc.1 <0.1.8-0`).
+A suite of [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) (DSH) plugins that brings **ChatGPT/OpenAI Codex models** and a **Codex-style conversation experience** to the DSH Web UI. Built against DSH `0.2.0-rc.2` (peer range `>=0.2.0-rc.2 <0.3.0-0`).
 
 The repository is a pnpm monorepo containing two independent runtime plugins and one pure bundle package:
 
@@ -37,10 +37,10 @@ The two plugins are fully decoupled: the Conversation UI works with any model, a
 **Conversation UI — the chat rendered like Codex CLI**
 
 - **One ordered event stream.** Process updates, thinking, tool calls, retries, workflows, compaction, and commands appear in natural order within each turn.
-- **Turn folding.** A turn starts with an elapsed timer and a thinking placeholder; once the final answer lands, the process section collapses automatically (expandable, with a durable *auto-expand thinking* preference).
+- **Turn folding.** DSH shows the running status and elapsed clock; once the final answer lands, the process section collapses automatically (expandable, with a durable *auto-expand thinking* preference).
 - **Semantic tool icons.** Search, file read/edit, shell, database, web, skill, and agent tools each get a distinct icon so activity is scannable at a glance.
 - **Two reveal modes.** `teleprompter` (default): instant snapshots gliding upward; `typewriter`: grapheme-safe progressive reveal. Three smoothing presets (`realtime` / `balanced` / `silky`) tune the cadence.
-- **Smart viewport follow.** New content is followed within bounded scroll speeds; scrolling up releases the follow, returning to the bottom resumes it. Respects `prefers-reduced-motion` and degrades gracefully under low frame rates.
+- **Native viewport follow.** DSH controls restoration and bottom-follow, while the plugin smooths text reveal. It respects `prefers-reduced-motion` and reduces offscreen updates when frame rates drop.
 - **Deliverables card.** Each finished turn lists produced files and websites with added/removed line counts.
 
 ---
@@ -51,20 +51,20 @@ The manifest declares a packaged SVG with `icon: "./icon.svg"`. The suite and bo
 
 ## Installation
 
-Prerequisites: DeepSeek Harness (`dsh`) `>=0.1.7-rc.1 <0.1.8-0` with the `web` profile, Node.js `^22.19 || >=24`, pnpm 11.
+Prerequisites: DeepSeek Harness (`dsh`) `>=0.2.0-rc.2 <0.3.0-0` with the `web` profile, Node.js `^22.19 || >=24`, pnpm 11.
 
 **Install the whole suite (recommended):**
 
 ```sh
-dsh plugin --profile web add @jcy2387/dsh-suite@0.1.7-rc.2.1
+dsh plugin --profile web add @jcy2387/dsh-suite@0.2.0-rc.2
 dsh web
 ```
 
 **Or install plugins individually:**
 
 ```sh
-dsh plugin --profile web add @jcy2387/dsh-codex-provider@0.1.7-rc.2.1
-dsh plugin --profile web add @jcy2387/dsh-conversation-ui@0.1.7-rc.2.1
+dsh plugin --profile web add @jcy2387/dsh-codex-provider@0.2.0-rc.2
+dsh plugin --profile web add @jcy2387/dsh-conversation-ui@0.2.0-rc.2
 dsh web
 ```
 
@@ -136,6 +136,10 @@ Each runtime plugin ships two halves:
 The halves communicate through two narrow channels: an inline **boot-config global** (`window.__DSH_CONVERSATION_UI_CONFIG__`) injected into the served HTML carries validated plugin config to the browser, and the **authenticated Connection RPC** carries settings reads/writes back to the Host. Secrets (tokens, proxy URLs) never cross the RPC boundary.
 
 Package-level docs: [codex-provider](packages/codex-provider/README.md) · [conversation-ui](packages/conversation-ui/README.en.md) · [suite](packages/all/README.md)
+
+## DSH 0.2.0-rc.2 compatibility
+
+The provider uses pi-ai `0.87.1`, matching the DSH adapter. The Conversation UI leaves live status and scrolling to DSH 0.2 and uses its localized duration units for completed Turns, including stopped and failed outcomes. The provider, Conversation UI, and Suite were booted together with the Models and Logistics plugins in an isolated DSH `0.2.0-rc.2` Web profile; all three plugin settings pages rendered without browser console errors. Restart DSH after replacing an older plugin version.
 
 ## DSH 0.1.7-rc.2 startup
 

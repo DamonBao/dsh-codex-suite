@@ -1,6 +1,6 @@
 # @jcy2387/dsh-conversation-ui
 
-本版本面向 Harness `0.1.7-rc.2`。产物卡片使用新版列表插槽中的独立条目，与原生文件预览、变更审阅及其他插件的回合尾部内容共存；插件设置位于 Suite 或独立插件的配置页。`0.1.5` 用户应继续使用插件 `0.1.5-rc.2`。
+本版本面向 Harness `0.2.0-rc.2`。产物卡片使用列表插槽中的独立条目，与原生文件预览、变更审阅及其他插件的回合尾部内容共存；插件设置位于 Suite 或独立插件的配置页。时长文案使用宿主 Chat 的本地化单位。旧版 Harness 用户应继续使用对应旧版插件。
 
 [![CI](https://github.com/DamonBao/dsh-codex-suite/actions/workflows/ci.yml/badge.svg)](https://github.com/DamonBao/dsh-codex-suite/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
@@ -15,9 +15,10 @@ DeepSeek Harness（DSH）的 Codex 风格对话界面增强插件：把 Web 对�
 
 ### 事件流与 Turn 组织
 
-- **Turn 开始即反馈：** 提交后立刻显示处理计时器和「思考中」占位，不再对着空白等待。
+- **Turn 开始即反馈：** 提交后由 DSH 原生状态栏显示本地化的运行状态和计时，整轮只保留一处提示。
 - **过程与结论分离：** 每个 Turn 的过程内容（Think、Tool、重试等）归入独立过程区；最终答复成功落地后过程区**自动折叠**，需要时可手动展开。
 - **自然顺序保持：** Think、Tool、Retry、Workflow、Compaction、Command 和上下文注入按真实发生顺序排列，不会被分组打散。
+- **Markdown 图片：** 助手回复中的本地绝对路径图片通过 DSH 的受保护文件接口显示。
 
 ### 语义化 Tool 活动
 
@@ -53,7 +54,7 @@ DeepSeek Harness（DSH）的 Codex 风格对话界面增强插件：把 Web 对�
 已发布版本：
 
 ```sh
-dsh plugin --profile web add @jcy2387/dsh-conversation-ui@0.1.7-rc.2.1
+dsh plugin --profile web add @jcy2387/dsh-conversation-ui@0.2.0-rc.2
 dsh web
 ```
 
@@ -123,4 +124,4 @@ pnpm --filter @jcy2387/dsh-conversation-ui build
 
 [MIT](LICENSE) © jcy2387
 
-本版面向 DSH `0.1.7-rc.2`。旧 `conversation-ui.thinkAutoExpand` 从 `settings.yaml` 或 `settings.yaml.imported` 导入当前 profile 的 `cordis.patch.yml`，成功后记录迁移标记；失败保留源文件供重试。插件兼容导入只补充缺失的值。名称和描述通过导出的 `locale/en.json`、`locale/zh.json` 跟随 DSH 界面语言。
+本版面向 DSH `0.2.0-rc.2`。旧 `conversation-ui.thinkAutoExpand` 从 `settings.yaml` 或 `settings.yaml.imported` 导入当前 profile 的 `cordis.patch.yml`，成功后记录迁移标记；失败保留源文件供重试。插件兼容导入只补充缺失的值。名称和描述通过导出的 `locale/en.json`、`locale/zh.json` 跟随 DSH 界面语言。

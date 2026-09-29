@@ -5,6 +5,7 @@ import {
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { MarkdownLabels } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { ChatNodeViewProps, TurnTailOwnerProps } from '@deepseek-ai/dsh-client-ui-chat/client'
+import { fileMediaUrl } from '@deepseek-ai/dsh-util-workspace-path'
 // Type-only: the SessionStandardProps merge delivering `sessionId`.
 import type {} from '@deepseek-ai/dsh-client-ui-session/client'
 import { useConversationContent, type ConversationSmoothingPreset } from './useConversationContent.ts'
@@ -23,7 +24,14 @@ import { useCompactTranscript } from './TranscriptViewBridge.tsx'
 import css from './TypewriterAssistantNodeView.module.css'
 
 type AssistantProps = ChatNodeViewProps<'assistant-step'>
-type MarkdownProps = Pick<ComponentProps<typeof MarkdownText>, 'labels' | 'fileMentions' | 'text'>
+type MarkdownProps = Pick<ComponentProps<typeof MarkdownText>, 'labels' | 'fileMentions' | 'pathImages' | 'text'>
+
+function localPathMediaUrl(base: string, value: string): string | undefined {
+  let path: string
+  try { path = decodeURIComponent(value.split(/[?#]/u)[0] ?? '') }
+  catch { return undefined }
+  return fileMediaUrl(base, path)
+}
 
 function usePrefersReducedMotion(): boolean {
   const [reduced, setReduced] = useState(
@@ -67,6 +75,7 @@ function AnimatedMarkdownText({
   text,
   labels,
   fileMentions,
+  pathImages,
   streaming,
   announce,
   ownFollow,
@@ -107,7 +116,7 @@ function AnimatedMarkdownText({
           maxSpeedPxPerSec={maxScrollSpeedPxPerSec}
         >
           <div className={css.markdownFlow}>
-            <MarkdownText text={shown} streaming labels={labels} />
+            <MarkdownText text={shown} streaming labels={labels} pathImages={pathImages} />
           </div>
         </FollowHost>
       </>
@@ -115,7 +124,7 @@ function AnimatedMarkdownText({
   }
   return (
     <div className={css.markdownFlow}>
-      <MarkdownText text={text} labels={labels} fileMentions={fileMentions} />
+      <MarkdownText text={text} labels={labels} fileMentions={fileMentions} pathImages={pathImages} />
     </div>
   )
 }
@@ -261,6 +270,9 @@ export const TypewriterAssistantNodeView = memo(function TypewriterAssistantNode
     code: { copyLabel: t('copy'), copiedLabel: t('copied') },
     footnotes: t('markdown.footnotes'),
   }), [t])
+  const pathImages = useMemo(() => ({
+    resolve: (value: string) => localPathMediaUrl(document.baseURI, value),
+  }), [])
   // rc.2 Chat grouping can render one assistant-step node as multiple grouped
   // rows (a reasoning row and a response row); each row must render only its
   // own part, exactly like the native renderer's block filter.
@@ -323,6 +335,7 @@ export const TypewriterAssistantNodeView = memo(function TypewriterAssistantNode
             text={block.text}
             labels={labels}
             fileMentions={mentions}
+            pathImages={pathImages}
             streaming={streaming}
             announce={index === last}
             ownFollow={!streaming && index === lastFollow}

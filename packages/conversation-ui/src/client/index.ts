@@ -14,7 +14,6 @@ import type { ChatNodeViewProps, ChatViewSlotProps } from '@deepseek-ai/dsh-clie
 import { TypewriterAssistantNodeView } from './TypewriterAssistantNodeView.tsx'
 import { CodexTurnProcessNodeView } from './CodexTurnProcessNodeView.tsx'
 import { wrapFollowNodeView, type FollowWrapProps } from './TypewriterToolNodeView.tsx'
-import { wrapTurnPreludeNodeView } from './TurnPreludeUserNodeView.tsx'
 import { ConversationCard } from './ConversationCard.tsx'
 import { ConversationCardController } from './conversation-ui-card-controller.ts'
 import { DeliverablesTail } from './DeliverablesCard.tsx'
@@ -38,8 +37,8 @@ type AssistantProps = ChatNodeViewProps<'assistant-step'>
 const CONVERSATION_MODES: readonly string[] = ['typewriter', 'teleprompter']
 const CONVERSATION_PRESETS: readonly string[] = ['realtime', 'balanced', 'silky']
 
-/** Steering/command rows stay untouched; Assistant and Turn control are replaced. */
-const SKIP_WRAP = new Set(['assistant-step', 'turn-process', 'steering', 'command-input'])
+/** Input rows stay native; Assistant and Turn control are replaced. */
+const SKIP_WRAP = new Set(['assistant-step', 'turn-process', 'user', 'steering', 'turn-trigger', 'command-input'])
 
 /**
  * Read the Host-bridged boot config. The inline script is produced by this
@@ -93,12 +92,10 @@ function wrapGrowingChatRows(ctx: ClientContext, config: ConversationConfig): ()
         || wrapped.has(current)
       ) continue
       const inner = current as ComponentType<FollowWrapProps>
-      const next = key === 'user'
-        ? wrapTurnPreludeNodeView(inner)
-        : wrapFollowNodeView(inner, {
-            minSpeedPxPerSec: config.scrollSpeedPxPerSec,
-            maxSpeedPxPerSec: config.maxScrollSpeedPxPerSec,
-          })
+      const next = wrapFollowNodeView(inner, {
+        minSpeedPxPerSec: config.scrollSpeedPxPerSec,
+        maxSpeedPxPerSec: config.maxScrollSpeedPxPerSec,
+      })
       wrapped.add(next)
       entry.component = next
       restores.push(() => {

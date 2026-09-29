@@ -1,6 +1,6 @@
 # @jcy2387/dsh-conversation-ui
 
-This release targets Harness `0.1.7-rc.2`. The deliverables card uses an independent list entry alongside native file previews, change review, and other plugins’ Turn-tail contributions. Settings appear on the Suite or standalone bundle page. Harness `0.1.5` users should keep plugin version `0.1.5-rc.2`.
+This release targets Harness `0.2.0-rc.2`. The deliverables card uses an independent list entry alongside native file previews, change review, and other plugins’ Turn-tail contributions. Settings appear on the Suite or standalone bundle page. Elapsed labels use the host Chat's localized duration units. Older Harness users should keep the corresponding older plugin version.
 
 [![CI](https://github.com/DamonBao/dsh-codex-suite/actions/workflows/ci.yml/badge.svg)](https://github.com/DamonBao/dsh-codex-suite/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
@@ -15,9 +15,10 @@ A Codex-style conversation UI enhancement plugin for DeepSeek Harness (DSH): the
 
 ### Event stream and turn structure
 
-- **Instant turn feedback:** an elapsed timer and a thinking placeholder appear the moment you submit — no more staring at a blank screen.
+- **Instant turn feedback:** the native DSH running status and elapsed clock appear after submission, with one localized status throughout the turn.
 - **Process vs. answer:** each turn's process content (Think, tools, retries…) is grouped into its own section; once the final answer lands successfully, the process section **auto-collapses** and stays expandable by hand.
 - **Natural ordering:** Think, Tool, Retry, Workflow, Compaction, Command, and context-injection rows keep their real order instead of being regrouped away.
+- **Markdown images:** local absolute-path images in assistant replies use DSH's authenticated file route.
 
 ### Semantic tool activity
 
@@ -35,7 +36,7 @@ A Codex-style conversation UI enhancement plugin for DeepSeek Harness (DSH): the
 
 ### Streaming viewport cooperation
 
-- Current DSH `ChatView` exclusively owns per-session restoration, bottom-follow, and reader unpinning. The plugin no longer writes `scrollTop` or row transforms, avoiding ownership races during session switches.
+- Current DSH `ChatView` exclusively owns the running status, per-session restoration, bottom-follow, and reader unpinning. The plugin no longer adds a second waiting row or writes `scrollTop` and row transforms.
 - Respects `prefers-reduced-motion`; when the frame rate degrades, an FPS guard skips DOM commits for offscreen replies so visible frames stay fluid.
 
 ### Deliverables card
@@ -53,7 +54,7 @@ A Codex-style conversation UI enhancement plugin for DeepSeek Harness (DSH): the
 Published package:
 
 ```sh
-dsh plugin --profile web add @jcy2387/dsh-conversation-ui@0.1.7-rc.2.1
+dsh plugin --profile web add @jcy2387/dsh-conversation-ui@0.2.0-rc.2
 dsh web
 ```
 
@@ -123,4 +124,4 @@ Tests run on vitest + Testing Library, covering stream smoothing, native scroll 
 
 [MIT](LICENSE) © jcy2387
 
-This release targets DSH `0.1.7-rc.2`. It imports `conversation-ui.thinkAutoExpand` from `settings.yaml` or `settings.yaml.imported` into the active profile’s `cordis.patch.yml`, recording a marker after success and retaining the source after failure. The plugin’s compatibility import fills only missing values. Exported `locale/en.json` and `locale/zh.json` localize the name and description in DSH.
+This release targets DSH `0.2.0-rc.2`. It imports `conversation-ui.thinkAutoExpand` from `settings.yaml` or `settings.yaml.imported` into the active profile’s `cordis.patch.yml`, recording a marker after success and retaining the source after failure. The plugin’s compatibility import fills only missing values. Exported `locale/en.json` and `locale/zh.json` localize the name and description in DSH.
