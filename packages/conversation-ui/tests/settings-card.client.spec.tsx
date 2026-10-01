@@ -188,6 +188,7 @@ describe('conversation-ui settings card', () => {
       name: 'root',
       children: { 'conversation.chat.node': { kind: 'keyed', scope: 'session' } },
     } as never, () => null)
+    slots.register({ name: 'conversation.chat.node', key: 'assistant-step', locale: 'chat' }, () => null)
     await ctx.plugin({ inject: [...inject], apply }).await()
 
     expect(slots.entries('conversation.chat.node').some(entry => entry.options.key === 'assistant-step'))

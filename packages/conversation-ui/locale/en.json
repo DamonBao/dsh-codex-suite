@@ -1,6 +1,6 @@
 {
   "meta": {
     "title": "Conversation UI",
-    "description": "Codex-style streaming, thinking blocks, tool activity, and deliverable previews."
+    "description": "Assistant reveal, thinking preferences, and deliverables integrated with native DSH chat."
   }
 }

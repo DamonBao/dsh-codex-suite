@@ -1,4 +1,3 @@
-import { createElement, useSyncExternalStore, type ComponentType } from 'react'
 import type { Context as ClientContext } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/dsh-client-locale/client'
 // Type-only declarations for Connection and bundle configuration slots.
@@ -10,16 +9,12 @@ import type {} from '@deepseek-ai/dsh-client-ui-plugin-manager/client'
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type {} from '@deepseek-ai/dsh-client-ui-chat/client'
 import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
-import type { ChatNodeViewProps, ChatViewSlotProps } from '@deepseek-ai/dsh-client-ui-chat/client'
-import { TypewriterAssistantNodeView } from './TypewriterAssistantNodeView.tsx'
-import { CodexTurnProcessNodeView } from './CodexTurnProcessNodeView.tsx'
-import { wrapFollowNodeView, type FollowWrapProps } from './TypewriterToolNodeView.tsx'
+import { registerAssistantEnhancement } from './NativeAssistantEnhancement.tsx'
 import { ConversationCard } from './ConversationCard.tsx'
 import { ConversationCardController } from './conversation-ui-card-controller.ts'
 import { DeliverablesTail } from './DeliverablesCard.tsx'
 import { deliverablesDefinition } from './deliverables.ts'
 import { createConversationSettingsApi } from './conversation-ui-settings-api.ts'
-import { wrapTranscriptView } from './TranscriptViewBridge.tsx'
 import { NS as SETTINGS_NS, en, zh } from './locales.ts'
 import { DEFAULT_CONVERSATION_CONFIG, CONVERSATION_BOOT_GLOBAL, type ConversationConfig } from '../config.ts'
 import { DEFAULT_CONVERSATION_SETTINGS } from '../settings.ts'
@@ -32,13 +27,8 @@ import { DEFAULT_CONVERSATION_SETTINGS } from '../settings.ts'
  */
 export const inject = ['slots']
 
-type AssistantProps = ChatNodeViewProps<'assistant-step'>
-
 const CONVERSATION_MODES: readonly string[] = ['typewriter', 'teleprompter']
 const CONVERSATION_PRESETS: readonly string[] = ['realtime', 'balanced', 'silky']
-
-/** Input rows stay native; Assistant and Turn control are replaced. */
-const SKIP_WRAP = new Set(['assistant-step', 'turn-process', 'user', 'steering', 'turn-trigger', 'command-input'])
 
 /**
  * Read the Host-bridged boot config. The inline script is produced by this
@@ -66,83 +56,6 @@ function readBootConfig(): ConversationConfig {
     throw new Error(`[dsh-conversation-ui] malformed ${CONVERSATION_BOOT_GLOBAL} boot global: ${JSON.stringify(raw)}`)
   }
   return raw as ConversationConfig
-}
-
-/**
- * Wrap every keyed Chat row except `assistant-step` in place. A second
- * register with the same `children` table throws because the child slot is
- * already declared, and only the winning entry receives `renderSlot`;
- * swapping `entry.component` keeps the original children, locale, and inject
- * seats. `assistant-step` is replaced below so text and Think use the
- * Codex-style Assistant presentation.
- * @param ctx - Browser context carrying the slot registry.
- * @returns Restorer that puts the original components back.
- */
-function wrapGrowingChatRows(ctx: ClientContext, config: ConversationConfig): () => void {
-  const restores: Array<() => void> = []
-  const wrapped = new WeakSet<object>()
-
-  const wrapAll = (): void => {
-    for (const entry of ctx.slots.entries('conversation.chat.node')) {
-      const key = entry.options.key
-      if (key === undefined || SKIP_WRAP.has(key)) continue
-      const current = entry.component
-      if (
-        (typeof current !== 'function' && (typeof current !== 'object' || current === null))
-        || wrapped.has(current)
-      ) continue
-      const inner = current as ComponentType<FollowWrapProps>
-      const next = wrapFollowNodeView(inner, {
-        minSpeedPxPerSec: config.scrollSpeedPxPerSec,
-        maxSpeedPxPerSec: config.maxScrollSpeedPxPerSec,
-      })
-      wrapped.add(next)
-      entry.component = next
-      restores.push(() => {
-        if (entry.component === next) entry.component = inner
-      })
-    }
-  }
-
-  wrapAll()
-  const off = ctx.on('slots/changed', (key: string) => {
-    if (key === 'conversation.chat.node') wrapAll()
-  })
-  return () => {
-    off()
-    for (const restore of restores) restore()
-  }
-}
-
-/** Bridge DSH's transcript preference through the native Chat view tree. */
-function wrapNativeChatView(ctx: ClientContext): () => void {
-  const restores: Array<() => void> = []
-  const wrapped = new WeakSet<object>()
-  const wrapAll = (): void => {
-    for (const entry of ctx.slots.entries('conversation.view')) {
-      if (entry.options.id !== 'chat') continue
-      const current = entry.component
-      if (
-        (typeof current !== 'function' && (typeof current !== 'object' || current === null))
-        || wrapped.has(current)
-      ) continue
-      const inner = current as ComponentType<ChatViewSlotProps>
-      const next = wrapTranscriptView(inner)
-      wrapped.add(next)
-      entry.component = next
-      restores.push(() => {
-        if (entry.component === next) entry.component = inner
-      })
-    }
-  }
-  wrapAll()
-  const off = ctx.on('slots/changed', (key: string) => {
-    if (key === 'conversation.view') wrapAll()
-  })
-  return () => {
-    off()
-    for (const restore of restores) restore()
-  }
 }
 
 /**
@@ -189,20 +102,13 @@ class PreferenceCell {
 }
 
 /**
- * Register the Codex-style renderer after the conversation package declares the
- * keyed Chat node seat. A lower priority shadows the built-in assistant row;
- * every other growing row is wrapped in place so Tool cards, retries, and
- * workflow runs keep their Codex presentation without taking ownership of the
- * DSH scrollport. The Host-bridged configuration selects immediate or
- * typewriter reveal and smoothing; the plugin-owned settings RPC supplies the
- * settings surface is composed.
- * @param ctx - Browser context carrying the shared slot registry.
+ * Add assistant reveal/preferences and independent delivery/settings cards.
+ * Native ChatView, tools, Turn controls, grouping, and scroll remain untouched.
+ * @param ctx - browser context carrying the shared slot registry.
  */
 export function apply(ctx: ClientContext): void {
   const config = readBootConfig()
   const preference = new PreferenceCell()
-
-  ctx.slots.inject('conversation.view', () => wrapNativeChatView(ctx))
 
   // Keep native file previews and change review alongside the plugin's deliveries.
   ctx.slots.inject('conversation.chat.turnTail', () => ctx.slots.register({
@@ -210,11 +116,14 @@ export function apply(ctx: ClientContext): void {
     id: '@jcy2387/dsh-conversation-ui',
     priority: -100,
     registrant: 'dsh-conversation-ui',
+    locale: SETTINGS_NS,
   }, DeliverablesTail))
   ctx.inject(['uiConversation'], (deliverablesCtx) => {
     const events = deliverablesCtx.uiConversation.events
     return events.register(deliverablesDefinition)
   })
+
+  ctx.inject(['locale'], (localeCtx) => localeCtx.effect(() => localeCtx.locale.register(SETTINGS_NS, { zh, en }), 'dsh-conversation-ui: dictionaries'))
 
   // The card talks to the plugin-owned loopback RPC, so the core settings
   // namespace allowlist cannot make it disappear. The stream still applies
@@ -228,7 +137,6 @@ export function apply(ctx: ClientContext): void {
     )
     const detachPreference = preference.attach(card)
     card.start()
-    settingsCtx.effect(() => settingsCtx.locale.register(SETTINGS_NS, { zh, en }), 'dsh-conversation-ui: settings dictionaries')
     for (const bundle of ['@jcy2387/dsh-conversation-ui', '@jcy2387/dsh-suite']) {
       settingsCtx.slots.inject('plugins.bundle.config', () => settingsCtx.slots.register({
         name: 'plugins.bundle.config',
@@ -243,41 +151,5 @@ export function apply(ctx: ClientContext): void {
     }
   })
 
-  const configured = function ConversationConfiguredView(props: AssistantProps) {
-    const thinkAutoExpand = useSyncExternalStore(
-      preference.subscribe,
-      preference.getSnapshot,
-      preference.getSnapshot,
-    )
-    return createElement(TypewriterAssistantNodeView, {
-      ...props,
-      mode: config.mode,
-      preset: config.preset,
-      revealCharsPerSec: config.revealCharsPerSec,
-      scrollSpeedPxPerSec: config.scrollSpeedPxPerSec,
-      maxScrollSpeedPxPerSec: config.maxScrollSpeedPxPerSec,
-      thinkAutoExpand,
-    })
-  }
-  ctx.slots.inject('conversation.chat.node', () => {
-    const unwrap = wrapGrowingChatRows(ctx, config)
-    const unshadow = ctx.slots.register({
-      name: 'conversation.chat.node',
-      key: 'assistant-step',
-      priority: -100,
-      locale: 'chat',
-      registrant: 'dsh-conversation-ui',
-    }, configured)
-    return () => {
-      unshadow()
-      unwrap()
-    }
-  })
-  ctx.slots.inject('conversation.chat.node', () => ctx.slots.register({
-    name: 'conversation.chat.node',
-    key: 'turn-process',
-    priority: -100,
-    locale: 'chat',
-    registrant: 'dsh-conversation-ui',
-  }, CodexTurnProcessNodeView))
+  ctx.slots.inject('conversation.chat.node', () => registerAssistantEnhancement(ctx, config, preference))
 }

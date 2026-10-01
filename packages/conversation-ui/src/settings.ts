@@ -17,9 +17,9 @@ export const CONVERSATION_SETTINGS_NS = 'conversation-ui'
  */
 export interface ConversationSettings {
   /**
-   * Whether a reasoning ("Think") block auto-expands while it is the
-   * streaming tail. Off keeps the block collapsed — the user can still open
-   * it by hand — and stops the running state from re-owning the disclosure.
+   * Whether native reasoning disclosures open when streaming begins. Live
+   * changes open or close streaming reasoning once; manual toggles and the
+   * enclosing Turn's disclosure resets remain owned by DSH.
    */
   thinkAutoExpand: boolean
 }

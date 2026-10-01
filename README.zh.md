@@ -14,7 +14,7 @@
 | 包 | 类型 | 功能 |
 | --- | --- | --- |
 | [`@jcy2387/dsh-codex-provider`](packages/codex-provider) | 运行时插件 | 注册 `openai-codex` Provider：ChatGPT OAuth 登录、主动令牌刷新、用量面板、代理感知网络和原生设置页。 |
-| [`@jcy2387/dsh-conversation-ui`](packages/conversation-ui) | 运行时插件 | 将 Web 对话重绘为 Codex 风格事件流：Turn 折叠、语义化 Tool 活动、流式揭示、产物卡片和平滑视口跟随。 |
+| [`@jcy2387/dsh-conversation-ui`](packages/conversation-ui) | 运行时插件 | 增强助手揭示、思考自动展开和产物展示，保留 DSH 原生对话布局与控制。 |
 | [`@jcy2387/dsh-suite`](packages/all) | 纯组合包 | 不含运行时代码，仅通过一个 profile patch 一次装齐两个插件。 |
 
 两个插件完全解耦：Conversation UI 可服务任意模型，Codex Provider 也可搭配原生对话界面使用。
@@ -34,14 +34,13 @@
 - **可靠性优先的默认值。** 默认 SSE 传输（避免 WebSocket 后期失败导致部分输出重复）、5 分钟流空闲超时、可配置重试策略。
 - **原生设置页** 位于 *插件 → DSH Codex Suite → codex-provider*，中英文界面、实时状态，RPC 仅限 loopback 权限——凭据绝不离开 Host。
 
-**Conversation UI —— 像 Codex CLI 一样渲染对话**
+**Conversation UI —— 在 DSH 原生对话中增强**
 
-- **单一有序事件流。** 过程答复、思考、工具调用、重试、工作流、压缩和命令按自然顺序在各自 Turn 内呈现。
-- **Turn 折叠。** DSH 原生显示运行状态和计时；最终答复落地后过程区自动折叠（可展开，并提供持久化的「自动展开思考」偏好）。
-- **语义化工具图标。** 搜索、文件读写、Shell、数据库、网页、技能、Agent 等工具各有专属图标，活动一眼可扫。
-- **两种揭示模式。** `teleprompter`（默认）：即时快照向上平滑滑动；`typewriter`：按字素渐进揭示。三档平滑预设（`realtime` / `balanced` / `silky`）调节节奏。
-- **原生视口跟随。** DSH 负责滚动位置恢复和底部跟随，插件负责平滑显示文字；尊重 `prefers-reduced-motion`，低帧率时减少屏幕外更新。
-- **产物卡片。** 每个完成的 Turn 列出生成的文件与站点，并附带增删行数。
+- **原生呈现。** 工具分组、工作步骤展示模式、过程折叠、运行状态和视口恢复由 DSH 管理。
+- **两种揭示模式。** `teleprompter`（默认）直接显示最新快照；`typewriter` 按字素揭示，可选三种预设和速度。完成或停止后立即显示完整快照。
+- **思考偏好。** 持久化的自动展开设置作用于原生流式思考，用户仍可手动折叠。
+- **原生助手功能。** Markdown、图片、文件引用、停止标记和最终答复操作保留 DSH 行为。
+- **产物卡片。** 完成回合展示文件编辑和网站，与原生文件预览共存；插件不扫描或隐藏原生行。
 
 ---
 

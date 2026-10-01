@@ -8,7 +8,7 @@ A pure [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) (DSH)
 ## What it installs
 
 - [`@jcy2387/dsh-codex-provider`](../codex-provider/README.md) — the Codex provider: ChatGPT OAuth, usage dashboard, proxy-aware networking, native Settings page.
-- [`@jcy2387/dsh-conversation-ui`](../conversation-ui/README.en.md) — the Codex-style conversation UI: event stream, turn folding, streaming reveal, deliverables.
+- [`@jcy2387/dsh-conversation-ui`](../conversation-ui/README.en.md) — native DSH assistant reveal, auto-expanded thinking, and deliverables.
 
 Both plugins remain independently configurable; the suite only wires them into the profile. To install or configure just one of them, install its package directly instead — but avoid keeping the suite and a standalone copy of the same plugin in one profile at the same time (see below).
 
