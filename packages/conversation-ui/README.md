@@ -1,28 +1,23 @@
 # @jcy2387/dsh-conversation-ui
 
-本版本面向 Harness `0.2.0-rc.2`。产物卡片使用列表插槽中的独立条目，与原生文件预览、变更审阅及其他插件的回合尾部内容共存；插件设置位于 Suite 或独立插件的配置页。时长文案使用宿主 Chat 的本地化单位。旧版 Harness 用户应继续使用对应旧版插件。
+本版本面向 Harness `0.2.0-rc.2`。产物卡片使用列表插槽中的独立条目，与原生文件预览、变更审阅及其他插件的回合尾部内容共存；插件设置位于 Suite 或独立插件的配置页。助手行委托原生组件渲染，工作步骤展示模式、工具分组、折叠和滚动由 DSH 管理。旧版 Harness 用户应继续使用对应旧版插件。
 
 [![CI](https://github.com/DamonBao/dsh-codex-suite/actions/workflows/ci.yml/badge.svg)](https://github.com/DamonBao/dsh-codex-suite/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 [English](README.en.md) | 简体中文
 
-DeepSeek Harness（DSH）的 Codex 风格对话界面增强插件：把 Web 对话重绘为一条有序事件流 —— 过程答复、思考、Tool 活动、重试、工作流与最终答复按发生顺序呈现，同时保持平滑的视口跟随。本包是 [DSH Codex Suite](../../README.zh.md) Monorepo 的对话 UI 包。
+DeepSeek Harness（DSH）的对话增强插件：在原生助手组件上增加逐字揭示和思考自动展开，并通过独立插槽展示产物。原生 ChatView、工具卡片、回合控制和文件预览保持宿主的呈现。本包是 [DSH Codex Suite](../../README.zh.md) Monorepo 的对话 UI 包。
 
 **本包与 Codex Provider 完全独立**，可以单独安装并服务任意模型。
 
 ## 功能
 
-### 事件流与 Turn 组织
+### 原生对话协作
 
-- **Turn 开始即反馈：** 提交后由 DSH 原生状态栏显示本地化的运行状态和计时，整轮只保留一处提示。
-- **过程与结论分离：** 每个 Turn 的过程内容（Think、Tool、重试等）归入独立过程区；最终答复成功落地后过程区**自动折叠**，需要时可手动展开。
-- **自然顺序保持：** Think、Tool、Retry、Workflow、Compaction、Command 和上下文注入按真实发生顺序排列，不会被分组打散。
-- **Markdown 图片：** 助手回复中的本地绝对路径图片通过 DSH 的受保护文件接口显示。
-
-### 语义化 Tool 活动
-
-- 搜索、文件读取、编辑、命令、数据库、网页、技能、Agent 等工具各有专属图标，活动流一眼可扫；工具组可折叠/展开。
+- 工作步骤展示的简洁、标准、详细和完全展开模式继续使用 DSH 的原生分组、思考摘要和过程折叠。
+- Markdown、受保护的本地图片、图片附件、文件引用、停止标记和最终答复操作由原生助手组件渲染。
+- 工具、重试、工作流、命令和上下文行保留原生布局；插件不修改注册表中的组件，也不通过 Portal 重排行。
 
 ### 两种流式揭示模式
 
@@ -32,12 +27,12 @@ DeepSeek Harness（DSH）的 Codex 风格对话界面增强插件：把 Web 对�
 | `typewriter` | 按字素（grapheme）渐进揭示，对中文、emoji 等宽字符安全。 |
 
 - 三档平滑预设：`realtime`（更跟手）、`balanced`（默认）、`silky`（更绵密）。预设控制揭示节奏曲线：到达速率的 EMA 平滑、缓冲目标、追速上限和停顿后的收尾排空速度，让长回复不会整段砸出、快流不会卡顿。
-- `typewriter` 模式另有固定揭示速度 `revealCharsPerSec` 可调。
+- `typewriter` 模式另有固定揭示速度 `revealCharsPerSec` 可调。回合完成或停止后立即显示完整快照；加载历史和切换会话不会重播逐字效果。
 
 ### 流式视口协作
 
 - 当前 DSH `ChatView` 独占会话级位置恢复、底部跟随和用户上滑释放；插件不再直接写 `scrollTop` 或行变换，避免切换会话时争抢滚动所有权。
-- 尊重 `prefers-reduced-motion`；帧率退化时暂停离屏内容的 DOM 提交（FPS 守卫），保住可见帧的流畅。
+- 尊重 `prefers-reduced-motion`，启用减少动态效果时直接显示最新快照。
 
 ### 产物卡片
 
@@ -54,7 +49,7 @@ DeepSeek Harness（DSH）的 Codex 风格对话界面增强插件：把 Web 对�
 已发布版本：
 
 ```sh
-dsh plugin --profile web add @jcy2387/dsh-conversation-ui@0.2.0-rc.2
+dsh plugin --profile web add @jcy2387/dsh-conversation-ui@0.2.0-rc.2.1
 dsh web
 ```
 
@@ -67,7 +62,7 @@ dsh web
 
 也可以安装 [`@jcy2387/dsh-suite`](../all/README.md) 组合包，一次启用 Codex Provider 与本插件。
 
-安装后无需任何操作：发起新对话即自动启用事件流渲染，历史会话不受影响。
+安装后自动增强原生助手行，既有会话数据不变。
 
 ## 配置
 
@@ -108,7 +103,11 @@ Overlay 示例：
 本包由两半组成，通过一条极窄的配置通道协作：
 
 - **Host 半**（`src/`）：Cordis 插件。负责校验配置 schema，并把校验后的配置注入每个服务出的 index HTML（启动配置全局变量 `window.__DSH_CONVERSATION_UI_CONFIG__`）；同时注册用户设置命名空间与一条仅限 loopback 的设置 RPC（读取/写入偏好、查询安装形态、触发 npm 更新）。
-- **Web 半**（`src/client/`）：React 视图。以低优先级注册替换 `assistant-step` 与 Turn 过程呈现；其余对话行（Tool 卡片、重试、工作流等）原位包装，但滚动完全委托给 DSH `ChatView`；在 Turn 尾部注册产物卡片，并在设置页挂载插件配置卡片。缺少 locale / connection / 设置服务时仍以默认配置运行流式渲染。
+- **Web 半**（`src/client/`）：通过 `conversation.chat.node` 的 `assistant-step` 键注册薄包装，保留既有组件的 locale 与注入信息，只调整流式文本和原生 `useDisclosure`。不接管 `conversation.view` 或 `turn-process`，不读取宿主 DOM。产物使用 `conversation.chat.turnTail` 的独立列表条目，设置使用 `plugins.bundle.config`。组件装卸跟随插槽声明；若既有助手组件拥有子插槽或 Store，则保留该组件原样。
+
+### 升级后的呈现
+
+旧版插件的自定义工具图标、工具分组框和过程折叠样式已交由 DSH 原生 UI。请使用 DSH 的「工作步骤展示」选择呈现模式；插件的揭示配置与持久化「自动展开思考」偏好继续生效。没有会话格式或凭据迁移。产物卡片只读取持久化回合数据，不再扫描其他行的 DOM 或隐藏原生文件预览。
 
 ## 开发
 
@@ -118,7 +117,7 @@ pnpm --filter @jcy2387/dsh-conversation-ui test
 pnpm --filter @jcy2387/dsh-conversation-ui build
 ```
 
-测试基于 vitest + Testing Library，覆盖流式揭示、原生滚动委托、Turn 折叠与设置卡片（客户端与 Host 两侧）。工作区级命令见 [Monorepo README](../../README.zh.md)。
+测试基于 vitest + Testing Library，加载已发布 DSH Chat 工厂，覆盖原生模式、思考折叠、图片、流式揭示、装卸顺序与设置卡片（客户端与 Host 两侧）。工作区级命令见 [Monorepo README](../../README.zh.md)。
 
 ## 许可证
 

@@ -14,7 +14,7 @@ The repository is a pnpm monorepo containing two independent runtime plugins and
 | Package | Kind | What it does |
 | --- | --- | --- |
 | [`@jcy2387/dsh-codex-provider`](packages/codex-provider) | Runtime plugin | Registers the `openai-codex` provider with ChatGPT OAuth login, proactive token refresh, usage dashboard, proxy-aware networking, and a native Settings page. |
-| [`@jcy2387/dsh-conversation-ui`](packages/conversation-ui) | Runtime plugin | Re-renders the Web chat as a Codex-style event stream: turn folding, semantic tool activity, streaming reveal, deliverables, and smooth viewport follow. |
+| [`@jcy2387/dsh-conversation-ui`](packages/conversation-ui) | Runtime plugin | Adds assistant reveal, auto-expanded thinking, and deliverables while preserving native DSH chat layout and controls. |
 | [`@jcy2387/dsh-suite`](packages/all) | Pure bundle | No runtime code — a single profile patch that installs both plugins at once. |
 
 The two plugins are fully decoupled: the Conversation UI works with any model, and the Codex Provider works with the stock chat UI.
@@ -34,14 +34,13 @@ The two plugins are fully decoupled: the Conversation UI works with any model, a
 - **Reliability-first defaults.** SSE transport by default (no partial-output duplication on WebSocket failure), 5-minute stream idle timeout, configurable retry policy.
 - **Native Settings page** at *Plugins → DSH Codex Suite → codex-provider* with zh/en localization, live status, and a loopback-only RPC boundary — credentials never leave the Host.
 
-**Conversation UI — the chat rendered like Codex CLI**
+**Conversation UI — enhancements within native DSH chat**
 
-- **One ordered event stream.** Process updates, thinking, tool calls, retries, workflows, compaction, and commands appear in natural order within each turn.
-- **Turn folding.** DSH shows the running status and elapsed clock; once the final answer lands, the process section collapses automatically (expandable, with a durable *auto-expand thinking* preference).
-- **Semantic tool icons.** Search, file read/edit, shell, database, web, skill, and agent tools each get a distinct icon so activity is scannable at a glance.
-- **Two reveal modes.** `teleprompter` (default): instant snapshots gliding upward; `typewriter`: grapheme-safe progressive reveal. Three smoothing presets (`realtime` / `balanced` / `silky`) tune the cadence.
-- **Native viewport follow.** DSH controls restoration and bottom-follow, while the plugin smooths text reveal. It respects `prefers-reduced-motion` and reduces offscreen updates when frame rates drop.
-- **Deliverables card.** Each finished turn lists produced files and websites with added/removed line counts.
+- **Native presentation.** DSH owns tool groups, work-details modes, process folding, running status, and viewport restoration.
+- **Two reveal modes.** `teleprompter` (default) displays current snapshots; `typewriter` progressively reveals graphemes with three presets and a configurable rate. Completion and interruption display the full snapshot immediately.
+- **Thinking preference.** The persisted auto-expand setting opens native streaming reasoning; readers can still collapse it manually.
+- **Native assistant features.** Markdown, images, file mentions, stopped markers, and final-answer actions retain DSH behavior.
+- **Deliverables card.** Completed turns list file edits and websites alongside native previews. The plugin neither scans nor hides native rows.
 
 ---
 
@@ -56,15 +55,15 @@ Prerequisites: DeepSeek Harness (`dsh`) `>=0.2.0-rc.2 <0.3.0-0` with the `web` p
 **Install the whole suite (recommended):**
 
 ```sh
-dsh plugin --profile web add @jcy2387/dsh-suite@0.2.0-rc.2
+dsh plugin --profile web add @jcy2387/dsh-suite@0.2.0-rc.2.1
 dsh web
 ```
 
 **Or install plugins individually:**
 
 ```sh
-dsh plugin --profile web add @jcy2387/dsh-codex-provider@0.2.0-rc.2
-dsh plugin --profile web add @jcy2387/dsh-conversation-ui@0.2.0-rc.2
+dsh plugin --profile web add @jcy2387/dsh-codex-provider@0.2.0-rc.2.1
+dsh plugin --profile web add @jcy2387/dsh-conversation-ui@0.2.0-rc.2.1
 dsh web
 ```
 
@@ -76,7 +75,9 @@ dsh plugin --profile web add link:$PWD/packages/conversation-ui
 dsh web
 ```
 
-Install **either** the suite **or** the individual plugins in a given profile — not both copies of the same plugin. Coexistence does not crash (the suite mounts its plugins inside a nested loader group, which avoids duplicate loader entry ids), but a direct install and the suite's copy share one loader entry: removing either side from the bundle list of a *running* dsh process silently stops that plugin until the next restart. Restart dsh after any bundle-list change.
+Install **either** the suite **or** the individual plugins in a given profile. The suite registers `codex-provider` and `conversation-ui` directly; installing their standalone bundles alongside it declares duplicate loader entry ids and prevents startup. Restart dsh after any bundle-list change.
+
+When upgrading from the grouped suite, remove overlays targeting `suite-plugins`; configure `codex-provider` and `conversation-ui` directly. Plugin ids, saved preferences, credentials, and session data remain unchanged.
 
 ## Quick start
 

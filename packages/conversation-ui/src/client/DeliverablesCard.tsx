@@ -1,4 +1,5 @@
-import { useLayoutEffect, useState } from 'react'
+import { useState } from 'react'
+import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
 import type { TurnTailOwnerProps } from '@deepseek-ai/dsh-client-ui-chat/client'
 import {
   IconChevronDownOutlineMedium,
@@ -9,7 +10,9 @@ import {
 import { selectDeliverables, type DeliverableEntry } from './deliverables.ts'
 import css from './DeliverablesCard.module.css'
 
-export interface DeliverablesCardProps extends TurnTailOwnerProps {
+type DeliverablesTailProps = TurnTailOwnerProps & PropsLocale<'settings.conversationUi'>
+
+export interface DeliverablesCardProps extends DeliverablesTailProps {
   readonly matched: readonly DeliverableEntry[]
 }
 
@@ -27,59 +30,32 @@ function pathParts(path: string): { parent: string; name: string } {
   return { parent: path.slice(0, separator + 1), name: path.slice(separator + 1) }
 }
 
-function hiddenKindLabel(entries: readonly DeliverableEntry[]): string {
-  if (entries.every(isWebsite)) return '网站'
-  if (entries.every(entry => !isWebsite(entry))) return '文件'
-  return '产物'
+function hiddenKindLabel(entries: readonly DeliverableEntry[], t: DeliverablesTailProps['t']): string {
+  if (entries.every(isWebsite)) return t('deliveriesWebsites')
+  if (entries.every(entry => !isWebsite(entry))) return t('deliveriesFiles')
+  return t('deliveriesItems')
 }
 
-function countLabel(entries: readonly DeliverableEntry[]): string {
+function countLabel(entries: readonly DeliverableEntry[], t: DeliverablesTailProps['t']): string {
   const files = entries.filter(entry => !isWebsite(entry)).length
   const websites = entries.length - files
-  if (files > 0 && websites === 0) return `已编辑 ${files} 个文件`
-  if (files === 0) return `交付 ${websites} 个网站`
-  return `已交付 ${entries.length} 项产物`
-}
-
-interface EditStats {
-  readonly added: number
-  readonly removed: number
-}
-
-function collectEditStats(turn: number): ReadonlyMap<string, EditStats> {
-  const result = new Map<string, EditStats>()
-  if (typeof document === 'undefined') return result
-  for (const element of document.querySelectorAll<HTMLElement>('[data-stream-edit-stats]')) {
-    const row = element.closest<HTMLElement>('[data-stream-turn]')
-    if (row?.getAttribute('data-stream-turn') !== String(turn)) continue
-    const path = element.getAttribute('data-stream-edit-file')
-    const match = /\+(\d+)\s+-\s*(\d+)/.exec(element.textContent ?? '')
-    if (path === null || match === null) continue
-    result.set(path, { added: Number(match[1]), removed: Number(match[2]) })
-  }
-  return result
+  if (files > 0 && websites === 0) return t('deliveriesEdited').replace('{count}', String(files))
+  if (files === 0) return t('deliveriesWebsitesCount').replace('{count}', String(websites))
+  return t('deliveriesCount').replace('{count}', String(entries.length))
 }
 
 /** Render this list contribution only when its Turn has delivered files or websites. */
-export function DeliverablesTail(props: TurnTailOwnerProps) {
+export function DeliverablesTail(props: DeliverablesTailProps) {
   const matched = selectDeliverables(props)
   return matched === null ? null : <DeliverablesCard {...props} matched={matched} />
 }
 
 /** Codex-style turn-tail card for edited files and deployed websites. */
-export function DeliverablesCard({ matched, turn, openFile }: DeliverablesCardProps) {
+export function DeliverablesCard({ matched: entries, openFile, t }: DeliverablesCardProps) {
   const [expanded, setExpanded] = useState(false)
-  const [domStats, setDomStats] = useState<ReadonlyMap<string, EditStats>>(() => new Map())
-  useLayoutEffect(() => {
-    setDomStats(collectEditStats(turn.turn))
-  }, [turn.turn, matched])
-  const entries = matched.map(entry => {
-    const stats = domStats.get(entry.path)
-    return stats === undefined || entry.added > 0 || entry.removed > 0 ? entry : { ...entry, ...stats }
-  })
   const visible = expanded ? entries : entries.slice(0, 3)
   const hidden = entries.length - visible.length
-  const summary = countLabel(entries)
+  const summary = countLabel(entries, t)
   const hasFiles = entries.some(entry => !isWebsite(entry))
   const firstWebsite = entries.find(isWebsite)
   return (
@@ -92,11 +68,11 @@ export function DeliverablesCard({ matched, turn, openFile }: DeliverablesCardPr
           <strong className={css.title}>{summary}</strong>
           {hasFiles ? (
             <button type="button" className={css.subtitle} onClick={() => { setExpanded(true) }}>
-              查看更改 ↗
+              {t('deliveriesViewChanges')} ↗
             </button>
           ) : firstWebsite !== undefined ? (
             <button type="button" className={css.subtitle} onClick={() => { openWebsite(firstWebsite.path) }}>
-              打开网站 ↗
+              {t('deliveriesOpenWebsite')} ↗
             </button>
           ) : null}
         </div>
@@ -134,13 +110,13 @@ export function DeliverablesCard({ matched, turn, openFile }: DeliverablesCardPr
       </div>
       {hidden > 0 && (
         <button type="button" className={css.more} onClick={() => { setExpanded(true) }}>
-          再显示 {hidden} 个{hiddenKindLabel(entries.slice(visible.length))}
+          {t('deliveriesMore').replace('{count}', String(hidden)).replace('{kind}', hiddenKindLabel(entries.slice(visible.length), t))}
           <span className={css.moreIcon} aria-hidden><IconChevronDownOutlineMedium /></span>
         </button>
       )}
       {expanded && entries.length > 3 && (
         <button type="button" className={css.more} onClick={() => { setExpanded(false) }}>
-          收起 <span className={css.moreIcon} aria-hidden><IconChevronUpOutlineMedium /></span>
+          {t('deliveriesCollapse')} <span className={css.moreIcon} aria-hidden><IconChevronUpOutlineMedium /></span>
         </button>
       )}
     </section>

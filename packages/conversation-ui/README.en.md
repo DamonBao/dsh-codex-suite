@@ -1,28 +1,23 @@
 # @jcy2387/dsh-conversation-ui
 
-This release targets Harness `0.2.0-rc.2`. The deliverables card uses an independent list entry alongside native file previews, change review, and other plugins’ Turn-tail contributions. Settings appear on the Suite or standalone bundle page. Elapsed labels use the host Chat's localized duration units. Older Harness users should keep the corresponding older plugin version.
+This release targets Harness `0.2.0-rc.2`. The deliverables card uses an independent list entry alongside native file previews, change review, and other plugins’ Turn-tail contributions. Settings appear on the Suite or standalone bundle page. Assistant rows delegate to the native renderer; DSH owns work-details modes, tool groups, folding, and scrolling. Older Harness users should keep the corresponding older plugin version.
 
 [![CI](https://github.com/DamonBao/dsh-codex-suite/actions/workflows/ci.yml/badge.svg)](https://github.com/DamonBao/dsh-codex-suite/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 English | [简体中文](README.md)
 
-A Codex-style conversation UI enhancement plugin for DeepSeek Harness (DSH): the Web chat is re-rendered as one ordered event stream — process updates, thinking, tool activity, retries, workflows, and the final answer appear in the order they happened, while DSH retains authoritative viewport control. This package is the Conversation UI package of the [DSH Codex Suite](../../README.md) monorepo.
+A conversation enhancement plugin for DeepSeek Harness (DSH): progressive reveal and auto-expanded thinking augment the native assistant renderer, with deliveries contributed through an independent slot. DSH retains its ChatView, tool cards, Turn controls, and file previews. This is the Conversation UI package of the [DSH Codex Suite](../../README.md) monorepo.
 
 **The package is fully independent from the Codex Provider** and can be installed alone to enhance conversations with any model.
 
 ## Features
 
-### Event stream and turn structure
+### Native conversation integration
 
-- **Instant turn feedback:** the native DSH running status and elapsed clock appear after submission, with one localized status throughout the turn.
-- **Process vs. answer:** each turn's process content (Think, tools, retries…) is grouped into its own section; once the final answer lands successfully, the process section **auto-collapses** and stays expandable by hand.
-- **Natural ordering:** Think, Tool, Retry, Workflow, Compaction, Command, and context-injection rows keep their real order instead of being regrouped away.
-- **Markdown images:** local absolute-path images in assistant replies use DSH's authenticated file route.
-
-### Semantic tool activity
-
-- Search, file read, edit, shell, database, web, skill, and agent tools each render a distinct icon, so the activity stream is scannable at a glance; groups collapse and expand.
+- Compact, Standard, Detailed, and Verbose work-details modes retain DSH's native grouping, reasoning previews, and process disclosure.
+- The native assistant renderer owns Markdown, protected local images, attachments, file mentions, stopped markers, and final-answer actions.
+- Tool, retry, workflow, command, and context rows retain their native layout. The plugin does not mutate registered components or reparent rows with portals.
 
 ### Two streaming reveal modes
 
@@ -32,12 +27,12 @@ A Codex-style conversation UI enhancement plugin for DeepSeek Harness (DSH): the
 | `typewriter` | Progressive reveal by grapheme cluster, safe for CJK text and emoji. |
 
 - Three smoothing presets: `realtime` (snappier), `balanced` (default), `silky` (extra smooth). Presets shape the reveal cadence — EMA-smoothed arrival rate, buffer targets, catch-up ceilings, and the settle drain after the input idles — so long replies never dump whole paragraphs at once and fast streams never stutter.
-- `typewriter` mode also exposes a fixed reveal rate via `revealCharsPerSec`.
+- `typewriter` mode exposes a fixed reveal rate via `revealCharsPerSec`. Completion and interruption immediately display the full snapshot; loading history or switching sessions does not replay the animation.
 
 ### Streaming viewport cooperation
 
 - Current DSH `ChatView` exclusively owns the running status, per-session restoration, bottom-follow, and reader unpinning. The plugin no longer adds a second waiting row or writes `scrollTop` and row transforms.
-- Respects `prefers-reduced-motion`; when the frame rate degrades, an FPS guard skips DOM commits for offscreen replies so visible frames stay fluid.
+- Respects `prefers-reduced-motion` by showing the latest snapshot immediately.
 
 ### Deliverables card
 
@@ -54,7 +49,7 @@ A Codex-style conversation UI enhancement plugin for DeepSeek Harness (DSH): the
 Published package:
 
 ```sh
-dsh plugin --profile web add @jcy2387/dsh-conversation-ui@0.2.0-rc.2
+dsh plugin --profile web add @jcy2387/dsh-conversation-ui@0.2.0-rc.2.1
 dsh web
 ```
 
@@ -67,7 +62,7 @@ dsh web
 
 Alternatively install the [`@jcy2387/dsh-suite`](../all/README.md) bundle to enable both the Codex Provider and this plugin.
 
-No further steps are needed: the event-stream renderer activates automatically for new conversations, and existing sessions are untouched.
+Native assistant enhancement activates automatically; existing session data stays unchanged.
 
 ## Configuration
 
@@ -108,7 +103,11 @@ The package ships a [`conversation-ui-off.yml`](conversation-ui-off.yml) overlay
 The package ships two halves that cooperate over one very narrow config channel:
 
 - **Host half** (`src/`): a Cordis plugin. It validates the config schema, injects the validated value into every served index HTML (the boot global `window.__DSH_CONVERSATION_UI_CONFIG__`), and registers the user-settings namespace plus a loopback-only settings RPC (read/write preferences, report installation kind, trigger an npm update).
-- **Web half** (`src/client/`): React views. It registers at low priority to shadow Assistant and Turn-process presentation, wraps other chat rows (tool cards, retries, workflows…) in place while delegating all scrolling to DSH `ChatView`, adds the turn-tail deliverables card, and mounts the plugin configuration card in Settings. The stream still renders with defaults when locale, connection, or the settings service is absent.
+- **Web half** (`src/client/`): registers a thin `assistant-step` wrapper in `conversation.chat.node`, preserving the existing renderer's locale and injection while adjusting streaming text and native `useDisclosure`. It does not replace `conversation.view` or `turn-process`, or read host DOM. Deliveries use an independent `conversation.chat.turnTail` list entry; settings use `plugins.bundle.config`. Registration follows the slot declaration lifetime. An assistant renderer owning child slots or a Store remains unwrapped.
+
+### Presentation after upgrading
+
+The old custom tool icons, tool group frames, and process folding styles now use native DSH presentation. Select a work-details mode in DSH; reveal configuration and the persisted Auto-expand thinking preference continue to apply. No session format or credential migration is needed. Delivery cards read persisted Turn data rather than scanning other rows' DOM or hiding native file previews.
 
 ## Development
 
@@ -118,7 +117,7 @@ pnpm --filter @jcy2387/dsh-conversation-ui test
 pnpm --filter @jcy2387/dsh-conversation-ui build
 ```
 
-Tests run on vitest + Testing Library, covering stream smoothing, native scroll delegation, Turn folding, and the settings card (both client and host sides). See the [monorepo README](../../README.md) for workspace-wide commands.
+Tests run on vitest + Testing Library, loading the published DSH Chat factory and covering native modes, reasoning disclosure, images, stream reveal, load/unload order, and the settings card (both client and host sides). See the [monorepo README](../../README.md) for workspace-wide commands.
 
 ## License
 

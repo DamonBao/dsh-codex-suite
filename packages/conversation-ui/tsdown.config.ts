@@ -18,7 +18,7 @@ const CLIENT_EXTERNALS: readonly string[] = [
   '@deepseek-ai/dsh-client-ui-primitives',
 ]
 
-const INLINE_SAFE = /^@deepseek-ai\/dsh-(session|llm|tools|brand|client-store|util-workspace-path)(\/|$)/
+const INLINE_SAFE = /^@deepseek-ai\/dsh-(session|llm|tools|brand|client-store)(\/|$)/
 const VENDORED_LIBRARY = /^@deepseek-ai\/(cosmokit|schemastery)(\/|$)/
 const GENERATED_REMOTE = /^@deepseek-ai\/dsh-[a-z0-9]+(?:-[a-z0-9]+)*\/remote$/
 

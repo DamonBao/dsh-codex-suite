@@ -1,7 +1,3 @@
-:global([data-turn-tail]:has([data-stream-deliverables-card]) > *:has([data-produced-files-row])) {
-  display: none !important;
-}
-
 .root {
   display: flex;
   flex-direction: column;
@@ -48,7 +44,7 @@
 .title {
   color: var(--dsw-alias-label-primary);
   font-size: 16px;
-  font-weight: 600;
+  font-weight: 500;
   line-height: 24px;
 }
 
