@@ -75,7 +75,9 @@ dsh plugin --profile web add link:$PWD/packages/conversation-ui
 dsh web
 ```
 
-在同一个 profile 里，整套 Suite 和单独插件**二选一**安装，不要让同一插件的两份来源共存。共存不会崩溃（Suite 通过嵌套加载组挂载插件，避免了重复 loader entry id），但直接安装的行与 Suite 的子行会共享同一个加载条目：在**运行中的** dsh 进程里移除任意一侧，对应插件会静默停止，直到下次重启才恢复。变更 bundle 列表后请重启 dsh。
+在同一个 profile 里，整套 Suite 和单独插件**二选一**安装。Suite 直接注册 `codex-provider` 和 `conversation-ui`；再安装同一插件的独立 bundle 会产生重复 loader entry id，导致无法启动。变更 bundle 列表后请重启 dsh。
+
+从旧分组套件升级时，移除针对 `suite-plugins` 的 overlay，直接配置 `codex-provider` 和 `conversation-ui`。插件 id、已保存的偏好、凭据和会话数据不变。
 
 ## 快速开始
 

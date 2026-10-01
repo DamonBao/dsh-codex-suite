@@ -1,30 +1,7 @@
-# Install both independent plugins as one Suite bundle.
-#
-# The children live inside a nested loader group so their rows never collide
-# at the profile root level. A profile may also list one of the child bundles
-# directly (the provider or the conversation UI installed on its own); two
-# root-level rows with the same id would abort boot with
-# "duplicate loader entry id". Inside the group the ids coexist instead: the
-# loader maps both rows onto one shared entry and the plugin runs once.
-#
-# Do NOT re-add `disabled: !!js ctx.loader.store[...]` guards here. They never
-# worked — `ctx.loader.store` is the root loader store (it only ever holds the
-# `include` entry), while profile entries live in the include subtree's store,
-# so the expression is always false. Pointing it at the right store would be
-# worse: the entry is registered before `disabled` is evaluated, so the check
-# would always see itself and disable the suite's children unconditionally.
-#
-# Coexistence caveat (loader semantics): while a direct row and the suite's
-# child row share one entry, removing either side from the bundle list of a
-# RUNNING dsh process disposes the shared entry and the plugin silently stops
-# until the next restart. Prefer installing either the suite OR the standalone
-# packages in a profile, and restart dsh after changing the bundle list.
+# Install the Suite or the standalone bundles in a profile, so each plugin id
+# is declared once. Settings address the same ids in either installation.
 - insert:
-    - id: suite-plugins
-      name: cordis:group
-      group: true
-      config:
-        - id: codex-provider
-          name: '@jcy2387/dsh-codex-provider'
-        - id: conversation-ui
-          name: '@jcy2387/dsh-conversation-ui'
+    - id: codex-provider
+      name: '@jcy2387/dsh-codex-provider'
+    - id: conversation-ui
+      name: '@jcy2387/dsh-conversation-ui'

@@ -23,23 +23,23 @@ After installing, follow each plugin's quick start: connect a ChatGPT account in
 
 ## How the bundle works
 
-The package's `dsh.bundle.patch` metadata points at `cordis.patch.yml`, which inserts both plugins inside a nested loader group:
+The package's `dsh.bundle.patch` metadata points at `cordis.patch.yml`, which inserts the two plugin rows directly:
 
 ```yaml
 - insert:
-    - id: suite-plugins
-      name: cordis:group
-      group: true
-      config:
-        - id: codex-provider
-          name: '@jcy2387/dsh-codex-provider'
-        - id: conversation-ui
-          name: '@jcy2387/dsh-conversation-ui'
+    - id: codex-provider
+      name: '@jcy2387/dsh-codex-provider'
+    - id: conversation-ui
+      name: '@jcy2387/dsh-conversation-ui'
 ```
 
-The nested group keeps the suite **crash-safe against coexistence**: the loader rejects two rows with the same id inside one group (the original `duplicate loader entry id` boot failure), but rows at different levels are allowed. If a profile also contains one of the plugins installed directly, the direct row and the suite's child row map onto one shared loader entry and the plugin runs exactly once.
+The plugin page lists these two components. Their ids and individual configuration stay the same as a standalone installation.
 
-**Coexistence caveat:** while both rows are present, removing either one (the suite or the direct install) from the bundle list of a *running* dsh process disposes that shared entry, and the plugin silently stops working until the next restart. The safest policy is to install either the suite **or** the standalone packages in a given profile, and to restart dsh after any bundle-list change.
+Install either the suite or the standalone bundles in a profile. Combining both declares duplicate loader entry ids and prevents startup. Restart dsh after changing the bundle list.
+
+### Upgrading from the grouped suite
+
+The `suite-plugins` group has been removed. Remove overlays targeting that group and configure `codex-provider` or `conversation-ui` directly. Existing plugin preferences, credentials, and session data remain unchanged.
 
 ## Development
 

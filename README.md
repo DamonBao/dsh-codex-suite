@@ -75,7 +75,9 @@ dsh plugin --profile web add link:$PWD/packages/conversation-ui
 dsh web
 ```
 
-Install **either** the suite **or** the individual plugins in a given profile — not both copies of the same plugin. Coexistence does not crash (the suite mounts its plugins inside a nested loader group, which avoids duplicate loader entry ids), but a direct install and the suite's copy share one loader entry: removing either side from the bundle list of a *running* dsh process silently stops that plugin until the next restart. Restart dsh after any bundle-list change.
+Install **either** the suite **or** the individual plugins in a given profile. The suite registers `codex-provider` and `conversation-ui` directly; installing their standalone bundles alongside it declares duplicate loader entry ids and prevents startup. Restart dsh after any bundle-list change.
+
+When upgrading from the grouped suite, remove overlays targeting `suite-plugins`; configure `codex-provider` and `conversation-ui` directly. Plugin ids, saved preferences, credentials, and session data remain unchanged.
 
 ## Quick start
 
