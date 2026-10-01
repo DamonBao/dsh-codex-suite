@@ -49,7 +49,7 @@ A conversation enhancement plugin for DeepSeek Harness (DSH): progressive reveal
 Published package:
 
 ```sh
-dsh plugin --profile web add @jcy2387/dsh-conversation-ui@0.2.0-rc.2
+dsh plugin --profile web add @jcy2387/dsh-conversation-ui@0.2.0-rc.2.1
 dsh web
 ```
 

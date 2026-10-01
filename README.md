@@ -55,15 +55,15 @@ Prerequisites: DeepSeek Harness (`dsh`) `>=0.2.0-rc.2 <0.3.0-0` with the `web` p
 **Install the whole suite (recommended):**
 
 ```sh
-dsh plugin --profile web add @jcy2387/dsh-suite@0.2.0-rc.2
+dsh plugin --profile web add @jcy2387/dsh-suite@0.2.0-rc.2.1
 dsh web
 ```
 
 **Or install plugins individually:**
 
 ```sh
-dsh plugin --profile web add @jcy2387/dsh-codex-provider@0.2.0-rc.2
-dsh plugin --profile web add @jcy2387/dsh-conversation-ui@0.2.0-rc.2
+dsh plugin --profile web add @jcy2387/dsh-codex-provider@0.2.0-rc.2.1
+dsh plugin --profile web add @jcy2387/dsh-conversation-ui@0.2.0-rc.2.1
 dsh web
 ```
 

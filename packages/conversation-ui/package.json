@@ -1,6 +1,6 @@
 {
   "name": "@jcy2387/dsh-conversation-ui",
-  "version": "0.2.0-rc.2",
+  "version": "0.2.0-rc.2.1",
   "description": "Assistant reveal, thinking preferences, and deliverables integrated with native DSH chat.",
   "license": "MIT",
   "type": "module",

@@ -49,7 +49,7 @@ DeepSeek Harness（DSH）的对话增强插件：在原生助手组件上增加�
 已发布版本：
 
 ```sh
-dsh plugin --profile web add @jcy2387/dsh-conversation-ui@0.2.0-rc.2
+dsh plugin --profile web add @jcy2387/dsh-conversation-ui@0.2.0-rc.2.1
 dsh web
 ```
 
