@@ -134,6 +134,53 @@
   outline-offset: 2px;
 }
 
+.select {
+  flex: none;
+  min-width: 9.5rem;
+  padding: 3px 8px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 6px;
+  background: var(--dsw-alias-bg-layer-3);
+  color: var(--dsw-alias-label-primary);
+  font: inherit;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.select:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.select:focus-visible {
+  outline: 2px solid var(--dsw-alias-brand-primary);
+  outline-offset: 1px;
+}
+
+.value {
+  flex: none;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.5;
+}
+
+.range {
+  width: 100%;
+  accent-color: var(--dsw-alias-brand-primary);
+  cursor: pointer;
+}
+
+.range:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.range:focus-visible {
+  outline: 2px solid var(--dsw-alias-brand-primary);
+  outline-offset: 2px;
+}
+
 .hint {
   margin: 0;
   font-size: 12px;

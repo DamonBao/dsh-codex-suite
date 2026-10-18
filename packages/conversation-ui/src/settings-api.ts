@@ -1,5 +1,7 @@
 /** Shared wire vocabulary for the plugin-owned settings RPC channel. */
 
+import type { ConversationSettings } from './settings.ts'
+
 /** Dedicated, loopback-only RPC channel registered by the Host half. */
 export const CONVERSATION_SETTINGS_RPC_CHANNEL = '/conversation-ui'
 
@@ -14,15 +16,13 @@ export const CONVERSATION_SETTINGS_RPC = {
 export type ConversationInstallationKind = 'npm' | 'development' | 'unmanaged'
 
 /** Redacted, plugin-owned configuration state returned to the browser. */
-export interface ConversationSettingsView {
+export interface ConversationSettingsView extends ConversationSettings {
   /** Version of the package currently running in the Host process. */
   version: string
   /** Source class of this package in the active profile. */
   installation: ConversationInstallationKind
   /** Whether the Host settings provider permits a write. */
   writable: boolean
-  /** Current resolved preference. */
-  thinkAutoExpand: boolean
   /** Whether a fixed npm update command is safe to offer. */
   canUpgrade: boolean
 }

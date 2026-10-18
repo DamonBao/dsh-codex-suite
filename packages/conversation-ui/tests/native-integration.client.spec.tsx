@@ -5,14 +5,18 @@ import { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import type { ChatNodeViewProps, ChatPresentationPolicy } from '@deepseek-ai/dsh-client-ui-chat/client'
 import type { StoredEntry } from '@deepseek-ai/dsh-client-ui-slots'
-import { createElement, memo, useSyncExternalStore, type FunctionComponent } from 'react'
+import { createElement, memo, useRef, useSyncExternalStore, type FunctionComponent } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { applyNativeChat } from './support/ui-chat-client.ts'
 import { apply, inject } from '../src/client/index.ts'
 import { CONVERSATION_BOOT_GLOBAL, DEFAULT_CONVERSATION_CONFIG } from '../src/config.ts'
 import { enhanceNativeAssistant } from '../src/client/NativeAssistantEnhancement.tsx'
+import { developerTools } from '../src/client/developer-tools.ts'
+import type { ConversationSettings } from '../src/settings.ts'
 
-type AssistantProps = ChatNodeViewProps<'assistant-step'>
+type AssistantProps = ChatNodeViewProps<'assistant-step'> & {
+  renderSlot?: (name: string, owner: Record<string, unknown>) => unknown
+}
 const NATIVE_INJECT = ['slots', 'locale', 'uiConversation', 'uiSession', 'configForms']
 const contexts: Context[] = []
 afterEach(async () => {
@@ -29,7 +33,11 @@ async function bench(pluginFirst = false) {
   const locale = new LocaleRuntime(ctx)
   ctx.provide('locale', locale)
   const settings = createSnapshotStore({ value: { transcriptView: 'standard' } })
-  ctx.provide('configForms', { get: () => ({ ...settings, set: () => Promise.resolve() }) } as never)
+  const developerToolsStore = createSnapshotStore(false)
+  ctx.provide('configForms', {
+    get: () => ({ ...settings, set: () => Promise.resolve() }),
+    developerTools: { enabled: developerToolsStore },
+  } as never)
   const definition = vi.fn(() => () => {})
   ctx.provide('uiConversation', {
     events: { register: definition, registerFallback: definition },
@@ -48,14 +56,18 @@ async function bench(pluginFirst = false) {
   await native.await()
   const plugin = overlay ?? ctx.plugin({ inject: [...inject], apply })
   await plugin.await()
-  return { ctx, locale, settings, native, plugin, definition }
+  return { ctx, locale, settings, developerToolsStore, native, plugin, definition }
 }
 
-function entry(ctx: Context, native = false): StoredEntry {
-  const value = ctx.slots.entries('conversation.chat.node').find(item =>
-    item.options.key === 'assistant-step' && (!native || item.registrant !== 'dsh-conversation-ui:assistant-enhancement'))
+function entry(ctx: Context): StoredEntry {
+  const value = ctx.slots.entries('conversation.chat.node').find(item => item.options.key === 'assistant-step')
   if (value === undefined) throw new Error('assistant renderer is missing')
   return value
+}
+
+/** The enhancement swaps the entry component with a plain function wrapper; native renders as memo objects. */
+function isEnhanced(component: unknown): boolean {
+  return typeof component === 'function' && !('$$typeof' in (component as object))
 }
 
 function props(ctx: Context, text: string, options: {
@@ -87,7 +99,12 @@ function props(ctx: Context, text: string, options: {
     useDisclosure,
     useTurnData: () => undefined,
     usePresentation: (select: (value: ChatPresentationPolicy) => unknown) => select(useSyncExternalStore(policy.subscribe, policy.getSnapshot)),
-    renderMessageImages: () => null,
+    useGroupAction: (_hidden: boolean, _reveal: () => void) => useRef<HTMLDivElement>(null),
+    renderSlot: (name: string, owner: Record<string, unknown>) => (
+      name === 'conversation.chat.message.images'
+        ? createElement('span', { 'data-test-images': '' })
+        : createElement('span', { 'data-test-reasoning-body': '' }, String(owner.text ?? ''))
+    ),
     fileMentions: () => undefined,
     openFile: vi.fn(),
     openSkill: vi.fn(), inspectCall: undefined, forkAt: vi.fn(),
@@ -102,24 +119,38 @@ function renderAssistant(ctx: Context, owner: AssistantProps) {
 }
 
 describe('native Chat integration', () => {
+  it('mirrors the shared developer-tools switch for native card arbitration', async () => {
+    const { developerToolsStore } = await bench()
+    expect(developerTools.getSnapshot()).toBe(false)
+    await act(async () => { developerToolsStore.set(true) })
+    expect(developerTools.getSnapshot()).toBe(true)
+  })
+
   it.each([false, true])('keeps all native components and child seats intact (plugin first: %s)', async (first) => {
     const { ctx, plugin } = await bench(first)
-    const original = entry(ctx, true)
-    const nativeRows = ctx.slots.entries('conversation.chat.node').filter(item => item !== entry(ctx))
-    const nativeComponents = nativeRows.map(item => item.component)
+    const assistant = entry(ctx)
+    const enhancedComponent = assistant.component
+    const otherEntries = ctx.slots.entries('conversation.chat.node').filter(item => item !== assistant)
+    const otherComponents = otherEntries.map(item => item.component)
     const view = ctx.slots.entries('conversation.view')[0]
     const NativeView = view?.component
-    expect(nativeRows.filter(item => item.options.key === 'turn-process')).toHaveLength(1)
+    expect(otherEntries.filter(item => item.options.key === 'turn-process')).toHaveLength(1)
     expect(ctx.slots.entries('conversation.chat.turnTail')).toHaveLength(1)
     expect(ctx.slots.spec('conversation.chat.commandview')).toBeDefined()
     expect(ctx.slots.spec('conversation.chat.assistant-actions')).toBeDefined()
-    expect(original.inject).toBeDefined()
-    const nativeFace = original.inject!('session-1' as never)
-    expect(entry(ctx).inject!('session-1' as never)).toEqual(nativeFace)
+    // The enhancement swaps the component in place: children, inject, and
+    // locale seats stay on the native registration.
+    expect(isEnhanced(enhancedComponent)).toBe(true)
+    expect(assistant.children).toBeDefined()
+    expect(assistant.inject).toBeDefined()
+    const nativeFace = assistant.inject!('session-1' as never)
+    expect(nativeFace).toEqual(assistant.inject!('session-1' as never))
     await plugin.dispose()
     expect(ctx.slots.entries('conversation.view')[0]?.component).toBe(NativeView)
-    expect(ctx.slots.entries('conversation.chat.node').map(item => item.component)).toEqual(nativeComponents)
-    expect(entry(ctx)).toBe(original)
+    expect(entry(ctx)).toBe(assistant)
+    expect(isEnhanced(entry(ctx).component)).toBe(false)
+    expect(entry(ctx).component).not.toBe(enhancedComponent)
+    expect(ctx.slots.entries('conversation.chat.node').filter(item => item !== assistant).map(item => item.component)).toEqual(otherComponents)
     expect(ctx.slots.entries('conversation.chat.turnTail')).toHaveLength(0)
   })
 
@@ -153,9 +184,13 @@ describe('native Chat integration', () => {
   it('delegates images, Markdown, unknown blocks and interrupted markers to published DSH', async () => {
     const { ctx } = await bench()
     const owner = props(ctx, '![image](/tmp/native-demo.png)', { status: 'interrupted' })
-    const renderImages = vi.fn(() => <span>Native image gallery</span>)
+    const renderSlot = vi.fn((name: string, owner: Record<string, unknown>) => (
+      name === 'conversation.chat.message.images'
+        ? <span>Native image gallery</span>
+        : <span>{String(owner.text ?? '')}</span>
+    ))
     const attachment = { kind: 'image' }
-    const view = renderAssistant(ctx, { ...owner, renderMessageImages: renderImages,
+    const view = renderAssistant(ctx, { ...owner, renderSlot,
       node: { ...owner.node, data: { ...owner.node.data, blocks: [
         ...owner.node.data.blocks,
         { kind: 'image', attachment } as never,
@@ -163,7 +198,10 @@ describe('native Chat integration', () => {
       ] } },
     })
     expect(view.getByAltText('image').getAttribute('src')).toContain('/api/file?path=')
-    expect(renderImages).toHaveBeenCalledWith({ images: [{ attachment }], align: 'start' })
+    expect(renderSlot).toHaveBeenCalledWith('conversation.chat.message.images', expect.objectContaining({
+      images: [{ attachment }],
+      align: 'start',
+    }))
     expect(view.getByText('Native image gallery')).toBeTruthy()
     fireEvent.click(view.getByText(ctx.locale.bind('chat')('message.unknownBlock'), { exact: false }))
     expect(view.container.textContent).toContain('42')
@@ -183,6 +221,10 @@ describe('native Chat integration', () => {
     expect(partial.length).toBeGreaterThan(0)
     expect(partial.length).toBeLessThan(120)
     view.rerender(<view.Renderer {...appended} node={{ ...appended.node, data: { ...appended.node.data, status: 'settled' } }} />)
+    // Settling no longer drops the queue: the already-typed prefix stays on
+    // screen while the remainder drains at the faster settle rate.
+    expect(view.container.textContent).not.toBe('A👩‍💻'.repeat(20))
+    await act(() => vi.advanceTimersByTimeAsync(1000))
     expect(view.container.textContent).toBe('A👩‍💻'.repeat(20))
     view.rerender(<view.Renderer {...props(ctx, 'Historical answer', { status: 'settled', sessionId: 'session-2' })} />)
     expect(view.container.textContent).toBe('Historical answer')
@@ -198,19 +240,58 @@ describe('native Chat integration', () => {
   })
 
   it('applies live preferences through the native disclosure without remounting it', async () => {
-    const { ctx } = await bench()
-    const preference = createSnapshotStore(false)
-    const Native = entry(ctx, true).component as FunctionComponent<AssistantProps>
-    const Renderer = enhanceNativeAssistant(Native as never, DEFAULT_CONVERSATION_CONFIG, preference)
+    const { ctx, plugin } = await bench()
+    await plugin.dispose()
+    const preference = createSnapshotStore({
+      thinkAutoExpand: false,
+      mode: DEFAULT_CONVERSATION_CONFIG.mode,
+      preset: DEFAULT_CONVERSATION_CONFIG.preset,
+      revealCharsPerSec: DEFAULT_CONVERSATION_CONFIG.revealCharsPerSec,
+    })
+    const Native = entry(ctx).component as FunctionComponent<AssistantProps>
+    const Renderer = enhanceNativeAssistant(Native as never, preference)
     const owner = props(ctx, 'Response', { reasoning: 'Live thinking' })
     const view = render(<Renderer {...owner} />)
     const row = view.container.querySelector('[data-variant="think"]')!
     expect(row.getAttribute('data-expanded')).toBeNull()
-    await act(async () => { preference.set(true) })
+    await act(async () => { preference.set({ ...preference.getSnapshot(), thinkAutoExpand: true }) })
     expect(row.getAttribute('data-expanded')).toBe('true')
-    await act(async () => { preference.set(false) })
+    await act(async () => { preference.set({ ...preference.getSnapshot(), thinkAutoExpand: false }) })
     expect(row.getAttribute('data-expanded')).toBeNull()
     expect(view.container.querySelector('[data-variant="think"]')).toBe(row)
+  })
+
+  it('applies a live reveal-mode change without remounting the assistant row', async () => {
+    vi.useFakeTimers({ toFake: ['requestAnimationFrame', 'cancelAnimationFrame', 'performance', 'Date'] })
+    const { ctx } = await bench()
+    const preference = createSnapshotStore<ConversationSettings>({
+      thinkAutoExpand: true,
+      mode: 'typewriter',
+      preset: 'balanced',
+      revealCharsPerSec: 20,
+    })
+    const Seen = (props: AssistantProps) => createElement(
+      'div',
+      null,
+      props.node.data.blocks.map(block => block.kind === 'text' ? block.text : '').join(''),
+    )
+    const Renderer = enhanceNativeAssistant(Seen as never, preference)
+    const owner = props(ctx, '')
+    const view = render(<Renderer {...owner} />)
+    const appended = {
+      ...owner,
+      node: {
+        ...owner.node,
+        data: { ...owner.node.data, blocks: [{ kind: 'text' as const, text: 'x'.repeat(80) }] },
+      },
+    }
+    view.rerender(<Renderer {...appended} />)
+    await act(() => vi.advanceTimersByTimeAsync(120))
+    expect(view.container.textContent!.length).toBeLessThan(80)
+    await act(async () => {
+      preference.set({ ...preference.getSnapshot(), mode: 'teleprompter' })
+    })
+    expect(view.container.textContent).toBe('x'.repeat(80))
   })
 
   it('bypasses the reveal queue when reduced motion is enabled during a stream', async () => {
@@ -234,17 +315,22 @@ describe('native Chat integration', () => {
     expect(listeners.size).toBe(0)
   })
 
-  it('leaves a replacement assistant with child slots untouched', async () => {
+  it('wraps a replacement assistant in place and keeps its child slots', async () => {
     const { ctx } = await bench()
     const Custom = () => null
     const unregister = ctx.slots.register({
       name: 'conversation.chat.node', key: 'assistant-step', priority: -10,
       children: { 'custom.assistant.actions': { kind: 'single', scope: 'session' } },
     } as never, Custom)
-    expect(entry(ctx).component).toBe(Custom)
-    expect(ctx.slots.entries('conversation.chat.node').filter(item => item.registrant === 'dsh-conversation-ui:assistant-enhancement')).toHaveLength(0)
+    const winner = entry(ctx)
+    expect(winner.component).not.toBe(Custom)
+    expect(isEnhanced(winner.component)).toBe(true)
+    expect(winner.children).toBeDefined()
+    expect(ctx.slots.spec('custom.assistant.actions' as never)).toBeDefined()
     unregister()
-    expect(entry(ctx).registrant).toBe('dsh-conversation-ui:assistant-enhancement')
+    const restored = entry(ctx)
+    expect(isEnhanced(restored.component)).toBe(true)
+    expect(restored.children).toBeDefined()
   })
 
   it('does not alter a tool registered after activation or its nested child slot', async () => {
@@ -258,13 +344,13 @@ describe('native Chat integration', () => {
     expect(view.getByText('Native custom tool').parentElement).toBe(view.container)
   })
 
-  it('removes the delegate when the original unloads, and reattaches on reload', async () => {
+  it('restores the native renderer when the original unloads, and rewraps on reload', async () => {
     const { ctx, native } = await bench()
     await native.dispose()
     expect(ctx.slots.entries('conversation.chat.node')).toHaveLength(0)
     const reload = ctx.plugin({ inject: NATIVE_INJECT, apply: applyNativeChat })
     await reload.await()
-    expect(entry(ctx).registrant).toBe('dsh-conversation-ui:assistant-enhancement')
-    expect(entry(ctx, true).locale).toBe('chat')
+    expect(isEnhanced(entry(ctx).component)).toBe(true)
+    expect(entry(ctx).locale).toBe('chat')
   })
 })

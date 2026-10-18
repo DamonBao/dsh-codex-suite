@@ -11,6 +11,7 @@ import * as React from 'react'
 import * as JsxRuntime from 'react/jsx-runtime'
 import * as ReactDom from 'react-dom'
 import * as ReactDomClient from 'react-dom/client'
+import * as ReactVirtual from '@tanstack/react-virtual'
 import * as Cordis from '@deepseek-ai/cordis'
 import * as UiSlots from '@deepseek-ai/dsh-client-ui-slots'
 import * as UiPrimitives from '@deepseek-ai/dsh-client-ui-primitives'
@@ -31,6 +32,7 @@ const externals = new Map<string, unknown>([
   ['react/jsx-runtime', JsxRuntime],
   ['react-dom', ReactDom],
   ['react-dom/client', ReactDomClient],
+  ['@tanstack/react-virtual', ReactVirtual],
   ['@deepseek-ai/cordis', Cordis],
   ['@deepseek-ai/dsh-client-ui-slots', UiSlots],
   ['@deepseek-ai/dsh-client-ui-primitives', UiPrimitives],

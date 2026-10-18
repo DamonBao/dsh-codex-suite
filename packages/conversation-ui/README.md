@@ -1,6 +1,6 @@
 # @jcy2387/dsh-conversation-ui
 
-本版本面向 Harness `0.2.0-rc.2`。产物卡片使用列表插槽中的独立条目，与原生文件预览、变更审阅及其他插件的回合尾部内容共存；插件设置位于 Suite 或独立插件的配置页。助手行委托原生组件渲染，工作步骤展示模式、工具分组、折叠和滚动由 DSH 管理。旧版 Harness 用户应继续使用对应旧版插件。
+本版本面向 Harness `0.2.1-rc.2`。产物卡片使用列表插槽中的独立条目；文件在原生 changed-files 卡启用时交给原生卡，插件补充网站，避免重复；插件设置位于 Suite 或独立插件的配置页。助手行委托原生组件渲染，工作步骤展示模式、工具分组、折叠和滚动由 DSH 管理。旧版 Harness 用户应继续使用对应旧版插件。
 
 [![CI](https://github.com/DamonBao/dsh-codex-suite/actions/workflows/ci.yml/badge.svg)](https://github.com/DamonBao/dsh-codex-suite/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
@@ -17,17 +17,17 @@ DeepSeek Harness（DSH）的对话增强插件：在原生助手组件上增加�
 
 - 工作步骤展示的简洁、标准、详细和完全展开模式继续使用 DSH 的原生分组、思考摘要和过程折叠。
 - Markdown、受保护的本地图片、图片附件、文件引用、停止标记和最终答复操作由原生助手组件渲染。
-- 工具、重试、工作流、命令和上下文行保留原生布局；插件不修改注册表中的组件，也不通过 Portal 重排行。
+- 工具、重试、工作流、命令和上下文行保留原生布局；插件只原地包装获胜的 assistant 渲染器，保留其 children、inject、store 和 locale，不改其他行，也不通过 Portal 重排。
 
 ### 两种流式揭示模式
 
 | 模式 | 行为 |
 | --- | --- |
-| `teleprompter`（默认） | 直接呈现模型的最新内容快照，不引入额外逐字队列。 |
-| `typewriter` | 按字素（grapheme）渐进揭示，对中文、emoji 等宽字符安全。 |
+| `typewriter`（默认） | 按字素（grapheme）渐进揭示，对中文、emoji 等宽字符安全。 |
+| `teleprompter` | 直接呈现模型的最新内容快照，不引入额外逐字队列。 |
 
 - 三档平滑预设：`realtime`（更跟手）、`balanced`（默认）、`silky`（更绵密）。预设控制揭示节奏曲线：到达速率的 EMA 平滑、缓冲目标、追速上限和停顿后的收尾排空速度，让长回复不会整段砸出、快流不会卡顿。
-- `typewriter` 模式另有固定揭示速度 `revealCharsPerSec` 可调。回合完成或停止后立即显示完整快照；加载历史和切换会话不会重播逐字效果。
+- `typewriter` 模式另有固定揭示速度 `revealCharsPerSec` 可调。回合结束后不会丢掉待揭示队列：剩余内容以更快的收尾速率排空，再切换到完整快照；停止和失败同样按此收尾。加载历史和切换会话不会重播逐字效果，减少动态效果时直接显示完整快照。
 
 ### 流式视口协作
 
@@ -36,11 +36,13 @@ DeepSeek Harness（DSH）的对话增强插件：在原生助手组件上增加�
 
 ### 产物卡片
 
-- 每个完成的 Turn 尾部列出**产物**：生成的文件与站点，附增删行数，产出成果一目了然。
+- 每个完成的 Turn 尾部列出**产物**：生成的文件与站点，附真实增删行数。
+- 当 DSH 原生 changed-files 卡启用（开发者工具打开且该回合有 git 变更）时，文件交给原生卡（含 diff 预览和审阅），插件只列网站，避免同一回合出现两张文件卡。
+- 路径在相对/绝对写法之间归一化并合并，同一文件不会重复计数。
 
 ### 插件设置卡片
 
-- 在 **插件 → DSH Codex Suite（或 Conversation UI）** 中提供持久化的「自动展开思考」开关（实时生效，无需重启）。
+- 在 **插件 → DSH Codex Suite（或 Conversation UI）** 中提供持久的揭示模式（typewriter / teleprompter）、平滑预设（realtime / balanced / silky）、揭示速度和「自动展开思考」；修改实时生效，无需重启。
 - 卡片同时显示当前版本与安装形态（npm / 本地开发），npm 安装支持一键更新（更新后需重启）。
 - 界面中英文本地化。
 
@@ -49,7 +51,7 @@ DeepSeek Harness（DSH）的对话增强插件：在原生助手组件上增加�
 已发布版本：
 
 ```sh
-dsh plugin --profile web add @jcy2387/dsh-conversation-ui@0.2.0-rc.2.1
+dsh plugin --profile web add @jcy2387/dsh-conversation-ui@0.2.1-rc.2
 dsh web
 ```
 
@@ -66,13 +68,13 @@ dsh web
 
 ## 配置
 
-Profile patch ID：`conversation-ui`。在 profile 的 `cordis.patch.yml` overlay 中设置（组合包默认值为 `mode: teleprompter`、`preset: balanced`）。
+Profile patch ID：`conversation-ui`。overlay 设置部署默认值（组合包默认值为 `mode: typewriter`、`preset: balanced`）；`mode`、`preset`、`revealCharsPerSec` 也可在插件设置卡中实时修改并持久化。
 
 | 选项 | 范围 | 默认 | 说明 |
 | --- | --- | --- | --- |
-| `mode` | `teleprompter` \| `typewriter` | `teleprompter` | 助手内容的揭示模式。 |
-| `preset` | `realtime` \| `balanced` \| `silky` | `balanced` | 平滑节奏预设。 |
-| `revealCharsPerSec` | 5–200 | `80` | `typewriter` 模式的固定揭示速度。 |
+| `mode` | `typewriter` \| `teleprompter` | `typewriter` | 部署默认揭示模式；设置卡可实时修改。 |
+| `preset` | `realtime` \| `balanced` \| `silky` | `balanced` | 部署默认平滑预设；设置卡可实时修改。 |
+| `revealCharsPerSec` | 5–200 | `80` | 部署默认揭示速度；设置卡可实时修改。 |
 | `scrollSpeedPxPerSec` | 1–200 | `48` | 已弃用；仅保留旧 Profile 配置兼容，滚动由 DSH 管理。 |
 | `maxScrollSpeedPxPerSec` | 1–2000 | `1000` | 已弃用；仅保留旧 Profile 配置兼容，滚动由 DSH 管理。 |
 
@@ -103,7 +105,7 @@ Overlay 示例：
 本包由两半组成，通过一条极窄的配置通道协作：
 
 - **Host 半**（`src/`）：Cordis 插件。负责校验配置 schema，并把校验后的配置注入每个服务出的 index HTML（启动配置全局变量 `window.__DSH_CONVERSATION_UI_CONFIG__`）；同时注册用户设置命名空间与一条仅限 loopback 的设置 RPC（读取/写入偏好、查询安装形态、触发 npm 更新）。
-- **Web 半**（`src/client/`）：通过 `conversation.chat.node` 的 `assistant-step` 键注册薄包装，保留既有组件的 locale 与注入信息，只调整流式文本和原生 `useDisclosure`。不接管 `conversation.view` 或 `turn-process`，不读取宿主 DOM。产物使用 `conversation.chat.turnTail` 的独立列表条目，设置使用 `plugins.bundle.config`。组件装卸跟随插槽声明；若既有助手组件拥有子插槽或 Store，则保留该组件原样。
+- **Web 半**（`src/client/`）：通过 `conversation.chat.node` 的 `assistant-step` 键原地包装获胜渲染器，保留既有组件的 children、inject、store 与 locale，只调整流式文本和原生 `useDisclosure`。不接管 `conversation.view` 或 `turn-process`，不读取宿主 DOM。产物使用 `conversation.chat.turnTail` 的独立列表条目，设置使用 `plugins.bundle.config`。组件装卸跟随插槽声明；获胜的 assistant 渲染器原地包装，children、inject、store 和 locale 保持原样。
 
 ### 升级后的呈现
 
@@ -123,4 +125,4 @@ pnpm --filter @jcy2387/dsh-conversation-ui build
 
 [MIT](LICENSE) © jcy2387
 
-本版面向 DSH `0.2.0-rc.2`。旧 `conversation-ui.thinkAutoExpand` 从 `settings.yaml` 或 `settings.yaml.imported` 导入当前 profile 的 `cordis.patch.yml`，成功后记录迁移标记；失败保留源文件供重试。插件兼容导入只补充缺失的值。名称和描述通过导出的 `locale/en.json`、`locale/zh.json` 跟随 DSH 界面语言。
+本版面向 DSH `0.2.1-rc.2`。旧 `conversation-ui.thinkAutoExpand` 从 `settings.yaml` 或 `settings.yaml.imported` 导入当前 profile 的 `cordis.patch.yml`，成功后记录迁移标记；失败保留源文件供重试。插件兼容导入只补充缺失的值。名称和描述通过导出的 `locale/en.json`、`locale/zh.json` 跟随 DSH 界面语言。

@@ -1,6 +1,7 @@
 /** Browser adapter for the Host-owned conversation-ui settings RPC. */
 
 import type { ConnectionHandle } from '@deepseek-ai/dsh-client-connection/client'
+import type { ConversationSettings } from '../settings.ts'
 import {
   CONVERSATION_SETTINGS_RPC,
   CONVERSATION_SETTINGS_RPC_CHANNEL,
@@ -21,6 +22,9 @@ function settingsView(value: unknown): ConversationSettingsView {
     || !['npm', 'development', 'unmanaged'].includes(data.installation as string)
     || typeof data.writable !== 'boolean'
     || typeof data.thinkAutoExpand !== 'boolean'
+    || !['typewriter', 'teleprompter'].includes(data.mode as string)
+    || !['realtime', 'balanced', 'silky'].includes(data.preset as string)
+    || typeof data.revealCharsPerSec !== 'number'
     || typeof data.canUpgrade !== 'boolean') {
     throw new Error('dsh-conversation-ui: malformed settings response')
   }
@@ -41,7 +45,7 @@ function accepted(result: Awaited<ReturnType<ConnectionHandle['rpc']['call']>>):
 /** Narrow client contract consumed by the staged settings-card controller. */
 export interface ConversationSettingsApi {
   read(): Promise<ConversationSettingsView>
-  write(thinkAutoExpand: boolean): Promise<ConversationSettingsView>
+  write(patch: Partial<ConversationSettings>): Promise<ConversationSettingsView>
   upgrade(): Promise<ConversationUpgradeView>
 }
 
@@ -51,11 +55,11 @@ export function createConversationSettingsApi(connection: ConnectionHandle): Con
     async read(): Promise<ConversationSettingsView> {
       return settingsView(accepted(await connection.rpc.call(CONVERSATION_SETTINGS_RPC_CHANNEL, CONVERSATION_SETTINGS_RPC.read, {})))
     },
-    async write(thinkAutoExpand: boolean): Promise<ConversationSettingsView> {
+    async write(patch: Partial<ConversationSettings>): Promise<ConversationSettingsView> {
       return settingsView(accepted(await connection.rpc.call(
         CONVERSATION_SETTINGS_RPC_CHANNEL,
         CONVERSATION_SETTINGS_RPC.write,
-        { thinkAutoExpand },
+        patch,
       )))
     },
     async upgrade(): Promise<ConversationUpgradeView> {

@@ -7,7 +7,7 @@
 
 English | [简体中文](README.zh.md)
 
-A suite of [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) (DSH) plugins that brings **ChatGPT/OpenAI Codex models** and a **Codex-style conversation experience** to the DSH Web UI. Built against DSH `0.2.0-rc.2` (peer range `>=0.2.0-rc.2 <0.3.0-0`).
+A suite of [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) (DSH) plugins that brings **ChatGPT/OpenAI Codex models** and a **Codex-style conversation experience** to the DSH Web UI. Built against DSH `0.2.1-rc.2` (peer range `>=0.2.0-rc.2 <0.3.0-0`).
 
 The repository is a pnpm monorepo containing two independent runtime plugins and one pure bundle package:
 
@@ -37,10 +37,10 @@ The two plugins are fully decoupled: the Conversation UI works with any model, a
 **Conversation UI — enhancements within native DSH chat**
 
 - **Native presentation.** DSH owns tool groups, work-details modes, process folding, running status, and viewport restoration.
-- **Two reveal modes.** `teleprompter` (default) displays current snapshots; `typewriter` progressively reveals graphemes with three presets and a configurable rate. Completion and interruption display the full snapshot immediately.
+- **Two reveal modes.** `typewriter` (default) progressively reveals graphemes with three presets and a configurable rate; `teleprompter` displays current snapshots. After a turn settles, the remaining queue drains at a faster settle rate before switching to the full snapshot, including stopped, failed, and reduced-motion paths.
 - **Thinking preference.** The persisted auto-expand setting opens native streaming reasoning; readers can still collapse it manually.
 - **Native assistant features.** Markdown, images, file mentions, stopped markers, and final-answer actions retain DSH behavior.
-- **Deliverables card.** Completed turns list file edits and websites alongside native previews. The plugin neither scans nor hides native rows.
+- **Deliverables card.** Completed turns list file edits and websites with real added/removed line counts. When DSH’s native changed-files card is active, files belong to that card (including diff preview and review) and the plugin adds websites only, so one turn never shows two file cards. Relative and absolute spellings of one file are merged.
 
 ---
 
@@ -55,15 +55,15 @@ Prerequisites: DeepSeek Harness (`dsh`) `>=0.2.0-rc.2 <0.3.0-0` with the `web` p
 **Install the whole suite (recommended):**
 
 ```sh
-dsh plugin --profile web add @jcy2387/dsh-suite@0.2.0-rc.2.1
+dsh plugin --profile web add @jcy2387/dsh-suite@0.2.1-rc.2
 dsh web
 ```
 
 **Or install plugins individually:**
 
 ```sh
-dsh plugin --profile web add @jcy2387/dsh-codex-provider@0.2.0-rc.2.1
-dsh plugin --profile web add @jcy2387/dsh-conversation-ui@0.2.0-rc.2.1
+dsh plugin --profile web add @jcy2387/dsh-codex-provider@0.2.1-rc.2
+dsh plugin --profile web add @jcy2387/dsh-conversation-ui@0.2.1-rc.2
 dsh web
 ```
 
@@ -88,7 +88,7 @@ When upgrading from the grouped suite, remove overlays targeting `suite-plugins`
 
 ## Configuration
 
-Both plugins are configured through the profile's `cordis.patch.yml` overlay; user-level preferences live in the Settings UI and persist across restarts.
+Both plugins read deployment defaults from the profile's `cordis.patch.yml` overlay. Conversation UI's `mode`, `preset`, `revealCharsPerSec`, and auto-expand thinking are also live, durable preferences in the plugin settings card.
 
 **Codex Provider** (profile patch ID: `codex-provider`)
 
@@ -107,9 +107,9 @@ Both plugins are configured through the profile's `cordis.patch.yml` overlay; us
 
 | Option | Values | Default | Notes |
 | --- | --- | --- | --- |
-| `mode` | `teleprompter` \| `typewriter` | `teleprompter` | Reveal style of assistant content. |
-| `preset` | `realtime` \| `balanced` \| `silky` | `balanced` | Smoothing cadence. |
-| `revealCharsPerSec` | 5–200 | `80` | Typewriter reveal rate. |
+| `mode` | `typewriter` \| `teleprompter` | `typewriter` | Deployment default reveal style; also editable live in Settings. |
+| `preset` | `realtime` \| `balanced` \| `silky` | `balanced` | Deployment default smoothing cadence; also editable live in Settings. |
+| `revealCharsPerSec` | 5–200 | `80` | Typewriter reveal rate; also editable live in Settings. |
 | `scrollSpeedPxPerSec` | 1–200 | `48` | Deprecated compatibility field; DSH owns scrolling. |
 | `maxScrollSpeedPxPerSec` | 1–2000 | `1000` | Deprecated compatibility field; DSH owns scrolling. |
 
@@ -125,7 +125,7 @@ To temporarily disable the Conversation UI without uninstalling it, apply the bu
 | Location | Controls |
 | --- | --- |
 | Plugins → DSH Codex Suite → codex-provider | Connect/disconnect account, login method, usage dashboard, banked-reset view and redemption, proxy mode. |
-| Plugins → DSH Codex Suite (or Conversation UI) | Auto-expand thinking (live), plugin version, one-click update for npm installs. |
+| Plugins → DSH Codex Suite (or Conversation UI) | Reveal mode, smoothing preset, reveal speed, auto-expand thinking (all live), plugin version, one-click update for npm installs. |
 
 ## Architecture
 
@@ -138,9 +138,9 @@ The halves communicate through two narrow channels: an inline **boot-config glob
 
 Package-level docs: [codex-provider](packages/codex-provider/README.md) · [conversation-ui](packages/conversation-ui/README.en.md) · [suite](packages/all/README.md)
 
-## DSH 0.2.0-rc.2 compatibility
+## DSH 0.2.1-rc.2 compatibility
 
-The provider uses pi-ai `0.87.1`, matching the DSH adapter. The Conversation UI leaves live status and scrolling to DSH 0.2 and uses its localized duration units for completed Turns, including stopped and failed outcomes. The provider, Conversation UI, and Suite were booted together with the Models and Logistics plugins in an isolated DSH `0.2.0-rc.2` Web profile; all three plugin settings pages rendered without browser console errors. Restart DSH after replacing an older plugin version.
+The provider uses pi-ai `1.3.0`, matching the DSH adapter. The Conversation UI leaves live status and scrolling to DSH 0.2 and uses its localized duration units for completed Turns, including stopped and failed outcomes. The provider, Conversation UI, and Suite were booted together with the Models and Logistics plugins in an isolated DSH `0.2.1-rc.2` Web profile; all three plugin settings pages rendered without browser console errors. Restart DSH after replacing an older plugin version.
 
 ## DSH 0.1.7-rc.2 startup
 

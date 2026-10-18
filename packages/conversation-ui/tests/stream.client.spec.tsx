@@ -6,7 +6,8 @@ import {
   splitGraphemes, computeQueueReveal, computeSettleDrain, useConversationContent,
 } from '../src/client/useConversationContent.ts'
 import { DeliverablesCard, DeliverablesTail } from '../src/client/DeliverablesCard.tsx'
-import { DELIVERABLES_DATA_KEY, deliverablesDefinition, selectDeliverables } from '../src/client/deliverables.ts'
+import { DELIVERABLES_DATA_KEY, deliverablesDefinition, samePath, selectDeliverables } from '../src/client/deliverables.ts'
+import { developerTools } from '../src/client/developer-tools.ts'
 import { DEFAULT_CONVERSATION_CONFIG } from '../src/config.ts'
 import { Config } from '../src/plugin.ts'
 import { zh } from '../src/client/locales.ts'
@@ -168,6 +169,87 @@ describe('Codex-style deliverables', () => {
     expect(DELIVERABLES_DATA_KEY).toBe('dsh-conversation-ui-deliverables')
   })
 
+  it('merges relative and absolute spellings and counts real changed lines', () => {
+    const start = deliverablesDefinition.start(
+      {} as never,
+      { event: { type: 'turn/start', data: { turn: 1 } } } as never,
+      {} as never,
+    )
+    let state = deliverablesDefinition.update(
+      { state: start } as never,
+      {
+        event: {
+          type: 'tool/call',
+          data: {
+            turn: 1,
+            step: 1,
+            callId: 'edit-absolute',
+            name: 'edit',
+            arguments: JSON.stringify({ file_path: 'src/App.tsx', old_string: 'a', new_string: 'b' }),
+          },
+        },
+      } as never,
+    )
+    state = deliverablesDefinition.update(
+      { state } as never,
+      {
+        event: {
+          type: 'tool/result',
+          seq: 3,
+          surfaceOp: 'append',
+          data: {
+            turn: 1,
+            step: 1,
+            message: {
+              source: { kind: 'tool', callId: 'edit-absolute' },
+              content: [{ type: 'tool-result', content: [], isError: false }],
+            },
+            meta: { diffs: [{ path: '/repo/src/App.tsx', oldText: 'a\nb\nc', newText: 'a\nB\nc' }] },
+          },
+        },
+      } as never,
+    )
+    state = deliverablesDefinition.update(
+      { state } as never,
+      {
+        event: {
+          type: 'tool/call',
+          data: {
+            turn: 1,
+            step: 1,
+            callId: 'edit-relative',
+            name: 'edit',
+            arguments: JSON.stringify({ file_path: 'src/App.tsx', old_string: 'a', new_string: 'b' }),
+          },
+        },
+      } as never,
+    )
+    const merged = deliverablesDefinition.update(
+      { state } as never,
+      {
+        event: {
+          type: 'tool/result',
+          seq: 5,
+          surfaceOp: 'append',
+          data: {
+            turn: 1,
+            step: 1,
+            message: {
+              source: { kind: 'tool', callId: 'edit-relative' },
+              content: [{ type: 'tool-result', content: [], isError: false }],
+            },
+          },
+        },
+      } as never,
+    )
+    expect(merged.entries).toEqual([
+      { path: 'src/App.tsx', seq: 5, added: 2, removed: 2, kind: 'file' },
+    ])
+    expect(samePath('/repo/src/App.tsx', 'src/App.tsx')).toBe(true)
+    expect(samePath('/private/tmp/cdp-debug.mjs', '/tmp/cdp-debug.mjs')).toBe(true)
+    expect(samePath('src/a.ts', 'lib/a.ts')).toBe(false)
+  })
+
   it('falls back to the native produced-file data when available', () => {
     const owner = {
       seq: 5,
@@ -182,6 +264,43 @@ describe('Codex-style deliverables', () => {
     expect(selectDeliverables(owner as never)).toEqual([
       { seq: 2, path: 'test-file-1.txt', added: 0, removed: 0, kind: 'file' },
       { seq: 3, path: 'test-file-2.txt', added: 0, removed: 0, kind: 'file' },
+    ])
+  })
+
+  it('merges native produced files into plugin entries instead of replacing them', () => {
+    const owner = {
+      seq: 5,
+      turn: {
+        data: {
+          get: (key: string) => key === DELIVERABLES_DATA_KEY
+            ? { entries: [{ path: 'src/App.tsx', seq: 2, added: 1, removed: 0, kind: 'file' }] }
+            : key === 'deliverables'
+              ? { produced: [{ seq: 2, path: '/repo/src/App.tsx' }, { seq: 3, path: 'src/Other.tsx' }] }
+              : undefined,
+        },
+      },
+    }
+    expect(selectDeliverables(owner as never)).toEqual([
+      { path: 'src/App.tsx', seq: 2, added: 1, removed: 0, kind: 'file' },
+      { path: 'src/Other.tsx', seq: 3, added: 0, removed: 0, kind: 'file' },
+    ])
+  })
+
+  it('returns native files when the plugin key exists but has no entries', () => {
+    const owner = {
+      seq: 5,
+      turn: {
+        data: {
+          get: (key: string) => key === DELIVERABLES_DATA_KEY
+            ? { entries: [] }
+            : key === 'deliverables'
+              ? { produced: [{ seq: 2, path: 'native.txt' }] }
+              : undefined,
+        },
+      },
+    }
+    expect(selectDeliverables(owner as never)).toEqual([
+      { path: 'native.txt', seq: 2, added: 0, removed: 0, kind: 'file' },
     ])
   })
 
@@ -239,12 +358,60 @@ describe('Codex-style deliverables', () => {
     fireEvent.click(view.getByTitle('https://preview.example.test'))
     expect(open).toHaveBeenCalledWith('https://preview.example.test', '_blank', 'noopener,noreferrer')
   })
+
+  it('defers file rows to the native changed-files card when developer tools are on', () => {
+    const listeners = new Set<() => void>()
+    let enabled = true
+    const detach = developerTools.attach({
+      getSnapshot: () => enabled,
+      subscribe: (listener: () => void) => {
+        listeners.add(listener)
+        return () => { listeners.delete(listener) }
+      },
+    })
+    try {
+      const owner = {
+        seq: 3,
+        openFile: vi.fn(),
+        turn: {
+          turn: 1,
+          data: {
+            get: (key: string) => key === DELIVERABLES_DATA_KEY
+              ? {
+                entries: [
+                  { path: 'src/App.tsx', seq: 2, added: 1, removed: 0, kind: 'file' },
+                  { path: 'https://preview.example.test', seq: 2, added: 0, removed: 0, kind: 'website' },
+                ],
+              }
+              : key === 'deliverables' ? { changes: { seq: 2 } } : undefined,
+          },
+        },
+      } as unknown as TurnTailOwnerProps
+      const view = render(<DeliverablesTail t={t} {...owner} />)
+      expect(view.queryByTitle('src/App.tsx')).toBeNull()
+      expect(view.getByTitle('https://preview.example.test')).toBeTruthy()
+
+      act(() => {
+        enabled = false
+        for (const listener of listeners) listener()
+      })
+      expect(view.getByTitle('src/App.tsx')).toBeTruthy()
+    } finally {
+      detach()
+    }
+  })
 })
 
 describe('plugin Config schema', () => {
   it('fills defaults when the overlay config is omitted', () => {
     const resolved = Config({} as never)
-    expect(resolved).toMatchObject(DEFAULT_CONVERSATION_CONFIG)
+    expect({
+      mode: resolved.mode.get(),
+      preset: resolved.preset.get(),
+      revealCharsPerSec: resolved.revealCharsPerSec.get(),
+      scrollSpeedPxPerSec: resolved.scrollSpeedPxPerSec,
+      maxScrollSpeedPxPerSec: resolved.maxScrollSpeedPxPerSec,
+    }).toMatchObject(DEFAULT_CONVERSATION_CONFIG)
     expect(resolved.thinkAutoExpand.get()).toBe(true)
   })
 
@@ -256,7 +423,13 @@ describe('plugin Config schema', () => {
       scrollSpeedPxPerSec: 100,
       maxScrollSpeedPxPerSec: 400,
     })
-    expect(resolved).toMatchObject({
+    expect({
+      mode: resolved.mode.get(),
+      preset: resolved.preset.get(),
+      revealCharsPerSec: resolved.revealCharsPerSec.get(),
+      scrollSpeedPxPerSec: resolved.scrollSpeedPxPerSec,
+      maxScrollSpeedPxPerSec: resolved.maxScrollSpeedPxPerSec,
+    }).toEqual({
       mode: 'teleprompter',
       preset: 'realtime',
       revealCharsPerSec: 60,

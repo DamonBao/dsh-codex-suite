@@ -220,6 +220,12 @@ export interface UseConversationContentOptions {
    */
   steadyCps?: number | undefined
   /**
+   * Faster steady rate used once the input goes quiet, so a backlog left by a
+   * fast model finishes shortly after completion instead of revealing at the
+   * live cadence or being dropped by the caller. Falls back to `steadyCps`.
+   */
+  settleCps?: number | undefined
+  /**
    * Seed for the arrival-rate EMA. When omitted, the preset's `defaultCps`
    * is used. The live rate then tracks observed arrival; this is not a cap.
    */
@@ -237,7 +243,7 @@ export interface UseConversationContentOptions {
  */
 export function useConversationContent(
   content: string,
-  { enabled = true, preset = 'balanced', shouldHoldBack, steadyCps, defaultCps, speedCpsRef }: UseConversationContentOptions = {},
+  { enabled = true, preset = 'balanced', shouldHoldBack, steadyCps, settleCps, defaultCps, speedCpsRef }: UseConversationContentOptions = {},
 ): string {
   const config = PRESET_CONFIG[preset]
   const seedCps = defaultCps ?? config.defaultCps
@@ -259,7 +265,9 @@ export function useConversationContent(
   const lastFrameTsRef = useRef<number | null>(null)
   const wakeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const holdBackRef = useRef(shouldHoldBack)
+  const settleCpsRef = useRef(settleCps)
   const speedOutRef = useRef(speedCpsRef)
+  settleCpsRef.current = settleCps
   speedOutRef.current = speedCpsRef
 
   useEffect(() => {
@@ -359,6 +367,11 @@ export function useConversationContent(
 
       let revealChars: number
       if (steadyCps !== undefined) {
+        // After the stream goes quiet, drain the leftover at the faster settle
+        // rate so a fast model's backlog finishes shortly after completion.
+        const effectiveSteadyCps = inputActive
+          ? steadyCps
+          : settleCpsRef.current ?? steadyCps
         const step = computeRevealStep(
           config,
           {
@@ -368,7 +381,7 @@ export function useConversationContent(
             emaCps: emaCpsRef.current,
             inputActive,
             settling,
-            steadyCps,
+            steadyCps: effectiveSteadyCps,
           },
           dtSeconds,
         )

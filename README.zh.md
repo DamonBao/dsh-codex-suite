@@ -7,7 +7,7 @@
 
 [English](README.md) | 简体中文
 
-为 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)（DSH）打造的插件套件：把 **ChatGPT / OpenAI Codex 模型**和 **Codex 风格的对话体验**带进 DSH Web UI。基于 DSH `0.2.0-rc.2` 构建（peer 范围 `>=0.2.0-rc.2 <0.3.0-0`）。
+为 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)（DSH）打造的插件套件：把 **ChatGPT / OpenAI Codex 模型**和 **Codex 风格的对话体验**带进 DSH Web UI。基于 DSH `0.2.1-rc.2` 构建（peer 范围 `>=0.2.0-rc.2 <0.3.0-0`）。
 
 本仓库是 pnpm monorepo，包含两个相互独立的运行时插件和一个纯组合包：
 
@@ -37,10 +37,10 @@
 **Conversation UI —— 在 DSH 原生对话中增强**
 
 - **原生呈现。** 工具分组、工作步骤展示模式、过程折叠、运行状态和视口恢复由 DSH 管理。
-- **两种揭示模式。** `teleprompter`（默认）直接显示最新快照；`typewriter` 按字素揭示，可选三种预设和速度。完成或停止后立即显示完整快照。
+- **两种揭示模式。** `typewriter`（默认）按字素揭示，可选三种预设和速度；`teleprompter` 直接显示最新快照。回合结束后剩余队列以更快的收尾速率排空，再切换到完整快照；停止、失败和减少动态效果同样保证不丢内容。
 - **思考偏好。** 持久化的自动展开设置作用于原生流式思考，用户仍可手动折叠。
 - **原生助手功能。** Markdown、图片、文件引用、停止标记和最终答复操作保留 DSH 行为。
-- **产物卡片。** 完成回合展示文件编辑和网站，与原生文件预览共存；插件不扫描或隐藏原生行。
+- **产物卡片。** 完成回合展示文件编辑和网站，附真实增删行数；原生 changed-files 卡启用时文件交给原生卡（含 diff 预览与审阅），插件只补网站，避免同一回合两张文件卡。相对/绝对路径会归一化合并，同一文件只计一次。
 
 ---
 
@@ -55,15 +55,15 @@
 **安装整套 Suite（推荐）：**
 
 ```sh
-dsh plugin --profile web add @jcy2387/dsh-suite@0.2.0-rc.2.1
+dsh plugin --profile web add @jcy2387/dsh-suite@0.2.1-rc.2
 dsh web
 ```
 
 **或单独安装插件：**
 
 ```sh
-dsh plugin --profile web add @jcy2387/dsh-codex-provider@0.2.0-rc.2.1
-dsh plugin --profile web add @jcy2387/dsh-conversation-ui@0.2.0-rc.2.1
+dsh plugin --profile web add @jcy2387/dsh-codex-provider@0.2.1-rc.2
+dsh plugin --profile web add @jcy2387/dsh-conversation-ui@0.2.1-rc.2
 dsh web
 ```
 
@@ -88,7 +88,7 @@ dsh web
 
 ## 配置
 
-两个插件都通过 profile 的 `cordis.patch.yml` overlay 配置；用户级偏好保存在设置界面并跨重启持久化。
+两个插件都通过 profile 的 `cordis.patch.yml` overlay 配置部署默认值；Conversation UI 的 `mode`、`preset`、`revealCharsPerSec` 和「自动展开思考」同时可在插件设置卡中实时修改并跨重启持久化。
 
 **Codex Provider**（profile patch ID：`codex-provider`）
 
@@ -107,9 +107,9 @@ dsh web
 
 | 选项 | 取值 | 默认 | 说明 |
 | --- | --- | --- | --- |
-| `mode` | `teleprompter` \| `typewriter` | `teleprompter` | 助手内容的揭示风格。 |
-| `preset` | `realtime` \| `balanced` \| `silky` | `balanced` | 平滑节奏档位。 |
-| `revealCharsPerSec` | 5–200 | `80` | 打字机揭示速度。 |
+| `mode` | `typewriter` \| `teleprompter` | `typewriter` | 部署默认揭示风格；也可在设置卡中实时修改。 |
+| `preset` | `realtime` \| `balanced` \| `silky` | `balanced` | 部署默认平滑节奏；也可在设置卡中实时修改。 |
+| `revealCharsPerSec` | 5–200 | `80` | 打字机揭示速度；也可在设置卡中实时修改。 |
 | `scrollSpeedPxPerSec` | 1–200 | `48` | 已弃用的兼容字段；滚动由 DSH 管理。 |
 | `maxScrollSpeedPxPerSec` | 1–2000 | `1000` | 已弃用的兼容字段；滚动由 DSH 管理。 |
 
@@ -125,7 +125,7 @@ dsh web
 | 位置 | 可控内容 |
 | --- | --- |
 | 插件 → DSH Codex Suite → codex-provider | 连接/断开账号、登录方式、用量面板、重置次数查看与兑换、代理模式。 |
-| 插件 → DSH Codex Suite（或 Conversation UI） | 自动展开思考（实时生效）、插件版本、npm 安装一键更新。 |
+| 插件 → DSH Codex Suite（或 Conversation UI） | 揭示模式、平滑预设、揭示速度、自动展开思考（均实时生效）、插件版本、npm 安装一键更新。 |
 
 ## 架构
 
@@ -138,9 +138,9 @@ dsh web
 
 各包详细文档：[codex-provider](packages/codex-provider/README.zh.md) · [conversation-ui](packages/conversation-ui/README.md) · [suite](packages/all/README.md)
 
-## DSH 0.2.0-rc.2 兼容
+## DSH 0.2.1-rc.2 兼容
 
-Provider 使用与 DSH 适配器一致的 pi-ai `0.87.1`。Conversation UI 将运行状态和滚动交给 DSH 0.2，已结束的 Turn 使用其本地化时长单位，并正确显示停止和失败状态。Provider、Conversation UI、Suite 已与 Models、Logistics 插件一起在隔离的 DSH `0.2.0-rc.2` Web profile 中启动，三个插件设置页均可呈现，浏览器控制台无错误。替换旧版插件后重启 DSH。
+Provider 使用与 DSH 适配器一致的 pi-ai `1.3.0`。Conversation UI 将运行状态和滚动交给 DSH 0.2，已结束的 Turn 使用其本地化时长单位，并正确显示停止和失败状态。Provider、Conversation UI、Suite 已与 Models、Logistics 插件一起在隔离的 DSH `0.2.1-rc.2` Web profile 中启动，三个插件设置页均可呈现，浏览器控制台无错误。替换旧版插件后重启 DSH。
 
 ## DSH 0.1.7-rc.2 启动兼容
 

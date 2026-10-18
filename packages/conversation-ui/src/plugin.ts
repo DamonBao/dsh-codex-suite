@@ -8,8 +8,8 @@ import Schema from '@deepseek-ai/schemastery'
 import { mountRpcChannel } from './channel-bridge.ts'
 import { DEFAULT_CONVERSATION_CONFIG, type ConversationConfig } from './config.ts'
 import { injectConversationConfig } from './boot-config.ts'
-import { CONVERSATION_PACKAGE_NAME, CONVERSATION_PACKAGE_VERSION } from './package-meta.ts'
-import { inspectProfileInstallation, updateNpmProfilePackage } from './profile-installation.ts'
+import { CONVERSATION_PACKAGE_VERSION } from './package-meta.ts'
+import { inspectConversationInstallation, updateNpmProfilePackage } from './profile-installation.ts'
 import { CONVERSATION_SETTINGS_RPC, CONVERSATION_SETTINGS_RPC_CHANNEL, type ConversationSettingsView } from './settings-api.ts'
 import { DEFAULT_CONVERSATION_SETTINGS, CONVERSATION_SETTINGS_NS, type ConversationSettings } from './settings.ts'
 
@@ -21,18 +21,22 @@ export const name = 'dsh-conversation-ui'
  * validates the value against this schema at load and fills omitted fields
  * from the shared defaults, so an invalid value fails the load loudly.
  */
-export interface Config extends ConversationConfig {
+export interface Config extends Omit<ConversationConfig, 'mode' | 'preset' | 'revealCharsPerSec'> {
   thinkAutoExpand: Volatile<boolean>
+  mode: Volatile<ConversationConfig['mode']>
+  preset: Volatile<ConversationConfig['preset']>
+  revealCharsPerSec: Volatile<number>
 }
 
 export const Config = Schema.object({
   thinkAutoExpand: Schema.boolean().default(DEFAULT_CONVERSATION_SETTINGS.thinkAutoExpand).volatile(),
-  mode: Schema.union(['typewriter', 'teleprompter'] as const).default(DEFAULT_CONVERSATION_CONFIG.mode),
-  preset: Schema.union(['realtime', 'balanced', 'silky'] as const).default(DEFAULT_CONVERSATION_CONFIG.preset),
+  mode: Schema.union(['typewriter', 'teleprompter'] as const).default(DEFAULT_CONVERSATION_CONFIG.mode).volatile(),
+  preset: Schema.union(['realtime', 'balanced', 'silky'] as const).default(DEFAULT_CONVERSATION_CONFIG.preset).volatile(),
   revealCharsPerSec: Schema.number()
     .min(5)
     .max(200)
-    .default(DEFAULT_CONVERSATION_CONFIG.revealCharsPerSec),
+    .default(DEFAULT_CONVERSATION_CONFIG.revealCharsPerSec)
+    .volatile(),
   scrollSpeedPxPerSec: Schema.number()
     .min(1)
     .max(200)
@@ -49,7 +53,41 @@ export const Config = Schema.object({
  */
 export const ConversationSettingsSchema: Schema<ConversationSettings> = Schema.object({
   thinkAutoExpand: Schema.boolean().default(DEFAULT_CONVERSATION_SETTINGS.thinkAutoExpand),
+  mode: Schema.union(['typewriter', 'teleprompter'] as const).default(DEFAULT_CONVERSATION_SETTINGS.mode),
+  preset: Schema.union(['realtime', 'balanced', 'silky'] as const).default(DEFAULT_CONVERSATION_SETTINGS.preset),
+  revealCharsPerSec: Schema.number()
+    .min(5)
+    .max(200)
+    .default(DEFAULT_CONVERSATION_SETTINGS.revealCharsPerSec),
 })
+
+const REVEAL_MODES = ['typewriter', 'teleprompter'] as const
+const REVEAL_PRESETS = ['realtime', 'balanced', 'silky'] as const
+
+/** Narrow one RPC write into the user-facing settings patch. */
+function settingsPatch(payload: unknown): Partial<ConversationSettings> | undefined {
+  if (typeof payload !== 'object' || payload === null || Array.isArray(payload)) return undefined
+  const input = payload as Record<string, unknown>
+  const patch: Partial<ConversationSettings> = {}
+  if ('thinkAutoExpand' in input) {
+    if (typeof input.thinkAutoExpand !== 'boolean') return undefined
+    patch.thinkAutoExpand = input.thinkAutoExpand
+  }
+  if ('mode' in input) {
+    if (!REVEAL_MODES.includes(input.mode as typeof REVEAL_MODES[number])) return undefined
+    patch.mode = input.mode as ConversationSettings['mode']
+  }
+  if ('preset' in input) {
+    if (!REVEAL_PRESETS.includes(input.preset as typeof REVEAL_PRESETS[number])) return undefined
+    patch.preset = input.preset as ConversationSettings['preset']
+  }
+  if ('revealCharsPerSec' in input) {
+    const value = input.revealCharsPerSec
+    if (typeof value !== 'number' || !Number.isFinite(value) || value < 5 || value > 200) return undefined
+    patch.revealCharsPerSec = value
+  }
+  return Object.keys(patch).length === 0 ? undefined : patch
+}
 
 /**
  * Host half: log the resolved configuration and bridge it to the browser
@@ -61,10 +99,16 @@ export const ConversationSettingsSchema: Schema<ConversationSettings> = Schema.o
  */
 export function apply(ctx: Context, config: Config): void {
   console.log(
-    `[dsh-conversation-ui] plugin loaded! mode=${config.mode} preset=${config.preset} `
-    + `seed=${config.revealCharsPerSec}cps scroll=native`,
+    `[dsh-conversation-ui] plugin loaded! mode=${config.mode.get()} preset=${config.preset.get()} `
+    + `seed=${config.revealCharsPerSec.get()}cps scroll=native`,
   )
-  const { thinkAutoExpand: _thinkAutoExpand, ...bootConfig } = config
+  const bootConfig: ConversationConfig = {
+    mode: config.mode.get(),
+    preset: config.preset.get(),
+    revealCharsPerSec: config.revealCharsPerSec.get(),
+    scrollSpeedPxPerSec: config.scrollSpeedPxPerSec,
+    maxScrollSpeedPxPerSec: config.maxScrollSpeedPxPerSec,
+  }
   ctx.inject(['webServer'], (httpCtx) => {
     httpCtx.effect(
       () => httpCtx.webServer.tapIndex(html => injectConversationConfig(html, bootConfig)),
@@ -83,12 +127,15 @@ export function apply(ctx: Context, config: Config): void {
     let upgrade: Promise<void> | undefined
 
     const view = (): ConversationSettingsView => {
-      const installation = inspectProfileInstallation(profileUrl, CONVERSATION_PACKAGE_NAME)
+      const installation = inspectConversationInstallation(profileUrl)
       return {
         version: CONVERSATION_PACKAGE_VERSION,
         installation: installation.kind,
         writable: settingsCtx.settings.writable,
         thinkAutoExpand: config.thinkAutoExpand.get(),
+        mode: config.mode.get(),
+        preset: config.preset.get(),
+        revealCharsPerSec: config.revealCharsPerSec.get(),
         canUpgrade: installation.kind === 'npm',
       }
     }
@@ -96,13 +143,13 @@ export function apply(ctx: Context, config: Config): void {
     const handle: ConnectionRpcHandler = async (endpoint, payload) => {
       if (endpoint === CONVERSATION_SETTINGS_RPC.read) return { ok: true, value: view() }
       if (endpoint === CONVERSATION_SETTINGS_RPC.write) {
-        if (typeof payload !== 'object' || payload === null
-          || typeof (payload as { thinkAutoExpand?: unknown }).thinkAutoExpand !== 'boolean') {
+        const patch = settingsPatch(payload)
+        if (patch === undefined) {
           return {
             ok: false,
             error: {
               code: 'settings-rejected',
-              message: 'thinkAutoExpand must be a boolean',
+              message: 'conversation-ui received an invalid settings patch',
               details: { ns: CONVERSATION_SETTINGS_NS },
             },
           }
@@ -118,7 +165,7 @@ export function apply(ctx: Context, config: Config): void {
           }
         }
         try {
-          await settingsCtx.settings.update(settingsNs, { thinkAutoExpand: (payload as { thinkAutoExpand: boolean }).thinkAutoExpand })
+          await settingsCtx.settings.update(settingsNs, patch)
         } catch {
           return {
             ok: false,
@@ -132,14 +179,14 @@ export function apply(ctx: Context, config: Config): void {
         return { ok: true, value: view() }
       }
       if (endpoint === CONVERSATION_SETTINGS_RPC.upgrade) {
-        const installation = inspectProfileInstallation(profileUrl, CONVERSATION_PACKAGE_NAME)
+        const installation = inspectConversationInstallation(profileUrl)
         if (installation.kind !== 'npm') {
           return { ok: false, error: { code: 'internal', message: 'conversation-ui is not an npm profile dependency', details: {} } }
         }
         if (upgrade !== undefined) {
           return { ok: false, error: { code: 'internal', message: 'conversation-ui update is already running', details: {} } }
         }
-        upgrade = updateNpmProfilePackage(installation.profileDir, CONVERSATION_PACKAGE_NAME)
+        upgrade = updateNpmProfilePackage(installation.profileDir, installation.packageName)
         try {
           await upgrade
         } catch {

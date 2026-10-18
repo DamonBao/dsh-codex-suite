@@ -26,7 +26,7 @@ export interface ConversationConfig {
 
 /** Defaults shared by the Host schema and the client-side fallback. */
 export const DEFAULT_CONVERSATION_CONFIG: ConversationConfig = {
-  mode: 'teleprompter',
+  mode: 'typewriter',
   preset: 'balanced',
   revealCharsPerSec: 80,
   scrollSpeedPxPerSec: 48,

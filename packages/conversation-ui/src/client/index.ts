@@ -9,15 +9,17 @@ import type {} from '@deepseek-ai/dsh-client-ui-plugin-manager/client'
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type {} from '@deepseek-ai/dsh-client-ui-chat/client'
 import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
+import type {} from '@deepseek-ai/dsh-client-ui-settings/client'
 import { registerAssistantEnhancement } from './NativeAssistantEnhancement.tsx'
 import { ConversationCard } from './ConversationCard.tsx'
 import { ConversationCardController } from './conversation-ui-card-controller.ts'
 import { DeliverablesTail } from './DeliverablesCard.tsx'
 import { deliverablesDefinition } from './deliverables.ts'
+import { developerTools } from './developer-tools.ts'
 import { createConversationSettingsApi } from './conversation-ui-settings-api.ts'
 import { NS as SETTINGS_NS, en, zh } from './locales.ts'
 import { DEFAULT_CONVERSATION_CONFIG, CONVERSATION_BOOT_GLOBAL, type ConversationConfig } from '../config.ts'
-import { DEFAULT_CONVERSATION_SETTINGS } from '../settings.ts'
+import { DEFAULT_CONVERSATION_SETTINGS, type ConversationSettings } from '../settings.ts'
 
 /**
  * Cordis services required by the browser half. Only `slots` is load-bearing
@@ -60,14 +62,18 @@ function readBootConfig(): ConversationConfig {
 
 /**
  * A live preference cell read by `useSyncExternalStore`. It starts on the
- * shared default and, once the plugin-owned settings controller is attached,
- * tracks the resolved `thinkAutoExpand` value. A composition (or test) that
- * ships no settings surface keeps the cell on the default.
+ * boot-bridged composition defaults and, once the plugin-owned settings
+ * controller has loaded, tracks the durable reveal and thinking preferences.
+ * A composition (or test) that ships no settings surface keeps the fallback.
  */
 class PreferenceCell {
   private readonly listeners = new Set<() => void>()
   private card: ConversationCardController | undefined
-  private value = DEFAULT_CONVERSATION_SETTINGS.thinkAutoExpand
+  private value: ConversationSettings
+
+  constructor(private readonly fallback: ConversationSettings) {
+    this.value = fallback
+  }
 
   /** Re-point the cell at the plugin-owned settings controller. */
   attach(card: ConversationCardController): () => void {
@@ -82,23 +88,37 @@ class PreferenceCell {
     }
   }
 
-  private read(): boolean {
-    return this.card?.getSnapshot().thinkAutoExpand ?? DEFAULT_CONVERSATION_SETTINGS.thinkAutoExpand
+  private read(): ConversationSettings {
+    const snapshot = this.card?.getSnapshot()
+    if (snapshot === undefined || snapshot.status !== 'ready') return this.fallback
+    return {
+      thinkAutoExpand: snapshot.thinkAutoExpand,
+      mode: snapshot.mode,
+      preset: snapshot.preset,
+      revealCharsPerSec: snapshot.revealCharsPerSec,
+    }
   }
 
   private refresh(): void {
     const next = this.read()
-    if (next === this.value) return
+    if (sameSettings(next, this.value)) return
     this.value = next
     for (const listener of this.listeners) listener()
   }
 
-  readonly getSnapshot = (): boolean => this.value
+  readonly getSnapshot = (): ConversationSettings => this.value
 
-  readonly subscribe = (listener: () => void): () => void => {
+  readonly subscribe = (listener: () => void): (() => void) => {
     this.listeners.add(listener)
     return () => { this.listeners.delete(listener) }
   }
+}
+
+function sameSettings(left: ConversationSettings, right: ConversationSettings): boolean {
+  return left.thinkAutoExpand === right.thinkAutoExpand
+    && left.mode === right.mode
+    && left.preset === right.preset
+    && left.revealCharsPerSec === right.revealCharsPerSec
 }
 
 /**
@@ -107,8 +127,21 @@ class PreferenceCell {
  * @param ctx - browser context carrying the shared slot registry.
  */
 export function apply(ctx: ClientContext): void {
-  const config = readBootConfig()
-  const preference = new PreferenceCell()
+  const bootConfig = readBootConfig()
+  const preference = new PreferenceCell({
+    ...DEFAULT_CONVERSATION_SETTINGS,
+    mode: bootConfig.mode,
+    preset: bootConfig.preset,
+    revealCharsPerSec: bootConfig.revealCharsPerSec,
+  })
+
+  // Mirror the native changed-files card's switch: when DSH draws its own file
+  // card, the plugin shows only websites instead of a second copy.
+  ctx.inject(['configForms'], (configCtx) => {
+    const source = configCtx.configForms.developerTools?.enabled
+    if (source === undefined) return
+    return developerTools.attach(source)
+  })
 
   // Keep native file previews and change review alongside the plugin's deliveries.
   ctx.slots.inject('conversation.chat.turnTail', () => ctx.slots.register({
@@ -151,5 +184,5 @@ export function apply(ctx: ClientContext): void {
     }
   })
 
-  ctx.slots.inject('conversation.chat.node', () => registerAssistantEnhancement(ctx, config, preference))
+  ctx.slots.inject('conversation.chat.node', () => registerAssistantEnhancement(ctx, preference))
 }

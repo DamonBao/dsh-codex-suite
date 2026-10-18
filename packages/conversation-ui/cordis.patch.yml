@@ -3,7 +3,7 @@
     - id: conversation-ui
       name: '@jcy2387/dsh-conversation-ui'
       config:
-        mode: teleprompter
+        mode: typewriter
         preset: balanced
         revealCharsPerSec: 80
         scrollSpeedPxPerSec: 48
