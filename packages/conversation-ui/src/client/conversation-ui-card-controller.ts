@@ -1,7 +1,7 @@
 /** Staged form state for the plugin-owned conversation-ui settings RPC. */
 
 import { createSnapshotStore, type SnapshotStore } from '@deepseek-ai/dsh-client-store'
-import { DEFAULT_CONVERSATION_SETTINGS } from '../settings.ts'
+import { DEFAULT_CONVERSATION_SETTINGS, type ConversationSettings } from '../settings.ts'
 import type { ConversationInstallationKind, ConversationSettingsView } from '../settings-api.ts'
 import type { ConversationSettingsApi } from './conversation-ui-settings-api.ts'
 
@@ -13,6 +13,9 @@ export interface ConversationCardState {
   saving: boolean
   failed: boolean
   thinkAutoExpand: boolean
+  mode: ConversationSettings['mode']
+  preset: ConversationSettings['preset']
+  revealCharsPerSec: number
   version: string | undefined
   installation: ConversationInstallationKind
   canUpgrade: boolean
@@ -26,7 +29,7 @@ export interface ConversationCardFace {
   hooks: {
     conversationUiCard: SnapshotStore<ConversationCardState>
   }
-  edit: (value: boolean) => void
+  edit: (patch: Partial<ConversationSettings>) => void
   save: () => void
   discard: () => void
   reload: () => void
@@ -37,7 +40,7 @@ export interface ConversationCardFace {
 export class ConversationCardController {
   private readonly store = createSnapshotStore<ConversationCardState>(this.projection())
   private loaded: ConversationSettingsView | undefined
-  private staged: boolean | undefined
+  private staged: Partial<ConversationSettings> | undefined
   private saving = false
   private failed = false
   private upgrading = false
@@ -72,8 +75,9 @@ export class ConversationCardController {
   inject(): ConversationCardFace {
     return {
       hooks: { conversationUiCard: this.store },
-      edit: (value) => {
-        this.staged = value
+      edit: (patch) => {
+        if (Object.keys(patch).length === 0) return
+        this.staged = { ...this.staged, ...patch }
         this.failed = false
         this.publish()
       },
@@ -93,10 +97,13 @@ export class ConversationCardController {
     return {
       status: this.loadStatus,
       writable: this.loaded?.writable ?? false,
-      dirty: this.staged !== undefined,
+      dirty: this.staged !== undefined && Object.keys(this.staged).length > 0,
       saving: this.saving,
       failed: this.failed,
-      thinkAutoExpand: this.staged ?? this.loaded?.thinkAutoExpand ?? DEFAULT_CONVERSATION_SETTINGS.thinkAutoExpand,
+      thinkAutoExpand: this.staged?.thinkAutoExpand ?? this.loaded?.thinkAutoExpand ?? DEFAULT_CONVERSATION_SETTINGS.thinkAutoExpand,
+      mode: this.staged?.mode ?? this.loaded?.mode ?? DEFAULT_CONVERSATION_SETTINGS.mode,
+      preset: this.staged?.preset ?? this.loaded?.preset ?? DEFAULT_CONVERSATION_SETTINGS.preset,
+      revealCharsPerSec: this.staged?.revealCharsPerSec ?? this.loaded?.revealCharsPerSec ?? DEFAULT_CONVERSATION_SETTINGS.revealCharsPerSec,
       version: this.loaded?.version,
       installation: this.loaded?.installation ?? 'unmanaged',
       canUpgrade: this.loaded?.canUpgrade ?? false,
@@ -125,7 +132,7 @@ export class ConversationCardController {
   }
 
   private async save(): Promise<void> {
-    if (this.staged === undefined || this.saving || this.loaded?.writable !== true) return
+    if (this.staged === undefined || Object.keys(this.staged).length === 0 || this.saving || this.loaded?.writable !== true) return
     const value = this.staged
     this.saving = true
     this.failed = false

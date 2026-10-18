@@ -35,5 +35,8 @@ function readRequiredString(field: keyof PackageManifest): string {
 /** npm package name, read from this plugin's manifest. */
 export const CONVERSATION_PACKAGE_NAME = readRequiredString('name')
 
+/** Companion bundle that can install this plugin as one of its dependencies. */
+export const CONVERSATION_SUITE_PACKAGE_NAME = '@jcy2387/dsh-suite'
+
 /** Version of the code currently loaded by the Host, read from its manifest. */
 export const CONVERSATION_PACKAGE_VERSION = readRequiredString('version')

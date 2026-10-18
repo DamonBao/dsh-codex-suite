@@ -4,12 +4,15 @@ import { spawn } from 'node:child_process'
 import { readFileSync } from 'node:fs'
 import { basename, isAbsolute, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { CONVERSATION_PACKAGE_NAME, CONVERSATION_SUITE_PACKAGE_NAME } from './package-meta.ts'
 
 /** A profile installation that can be updated through a fixed pnpm invocation. */
 export interface NpmProfileInstallation {
   kind: 'npm'
   profileDir: string
   profileName: string
+  /** Profile dependency to update; the suite owns the plugin when installed together. */
+  packageName: string
 }
 
 /** A local source is deliberately not eligible for one-click npm updates. */
@@ -99,14 +102,30 @@ export function inspectProfileInstallation(
   }
   if (isLocalSpecifier(specifier)) return { kind: 'development' }
   if (!isNpmSpecifier(specifier, packageName)) return { kind: 'unmanaged' }
-  return { kind: 'npm', profileDir, profileName: basename(profileDir) }
+  return { kind: 'npm', profileDir, profileName: basename(profileDir), packageName }
 }
 
-/** Run the same fixed package update operation that a profile user would invoke. */
+/**
+ * Resolve how this plugin is installed. A profile may depend on the plugin
+ * directly or on the suite that installs it as a dependency; prefer the direct
+ * entry, then fall back to the suite so the settings card can offer updates.
+ */
+export function inspectConversationInstallation(baseUrl: string | undefined): ProfileInstallation {
+  const direct = inspectProfileInstallation(baseUrl, CONVERSATION_PACKAGE_NAME)
+  if (direct.kind !== 'unmanaged') return direct
+  return inspectProfileInstallation(baseUrl, CONVERSATION_SUITE_PACKAGE_NAME)
+}
+
+/**
+ * Run the same fixed package update operation that a profile user would
+ * invoke. `--latest` is required because profiles pin an exact version (the
+ * README install command does), which a range-respecting `pnpm update` would
+ * never move.
+ */
 export function updateNpmProfilePackage(profileDir: string, packageName: string): Promise<void> {
   const command = process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm'
   return new Promise((resolve, reject) => {
-    const child = spawn(command, ['update', packageName], {
+    const child = spawn(command, ['update', '--latest', packageName], {
       cwd: profileDir,
       stdio: 'ignore',
       shell: false,

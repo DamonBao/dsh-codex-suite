@@ -7,13 +7,16 @@ export const NS = 'settings.conversationUi'
 export type ConversationLocaleKey =
   | 'title' | 'description'
   | 'thinkAutoExpand' | 'thinkAutoExpandHint'
+  | 'mode' | 'modeHint' | 'modeTypewriter' | 'modeTeleprompter'
+  | 'preset' | 'presetHint' | 'presetRealtime' | 'presetBalanced' | 'presetSilky'
+  | 'revealSpeed' | 'revealSpeedHint' | 'charsPerSecond'
   | 'readOnly' | 'loading' | 'unavailable' | 'retry'
   | 'version' | 'developmentVersion'
   | 'updates' | 'updateHint' | 'developmentBuild' | 'updateUnavailable'
   | 'update' | 'updating' | 'restartRequired' | 'updateFailed'
   | 'deliveriesFiles' | 'deliveriesWebsites' | 'deliveriesItems'
   | 'deliveriesEdited' | 'deliveriesWebsitesCount' | 'deliveriesCount'
-  | 'deliveriesViewChanges' | 'deliveriesOpenWebsite' | 'deliveriesMore' | 'deliveriesCollapse'
+  | 'deliveriesOpenWebsite' | 'deliveriesMore' | 'deliveriesCollapse'
   | 'save' | 'saving' | 'discard' | 'unsaved' | 'saveFailed'
 
 /** English copy. */
@@ -22,6 +25,18 @@ export const en: Record<ConversationLocaleKey, string> = {
   description: 'Assistant reveal and deliveries using the native DSH conversation UI.',
   thinkAutoExpand: 'Auto-expand thinking',
   thinkAutoExpandHint: 'Open the thinking block while it streams. Turn off to keep it collapsed.',
+  mode: 'Reveal mode',
+  modeHint: 'Typewriter reveals each grapheme; Teleprompter shows the newest snapshot immediately.',
+  modeTypewriter: 'Typewriter',
+  modeTeleprompter: 'Teleprompter',
+  preset: 'Smoothing preset',
+  presetHint: 'Controls how the reveal cadence follows the model stream.',
+  presetRealtime: 'Realtime',
+  presetBalanced: 'Balanced',
+  presetSilky: 'Silky',
+  revealSpeed: 'Reveal speed',
+  revealSpeedHint: 'Graphemes per second while typewriter mode is streaming; the settle drain is faster.',
+  charsPerSecond: 'chars/s',
   readOnly: 'This deployment stores settings read-only.',
   loading: 'Loading plugin settings…',
   unavailable: 'Plugin settings are unavailable in this connection.',
@@ -42,7 +57,6 @@ export const en: Record<ConversationLocaleKey, string> = {
   deliveriesEdited: 'Edited {count} files',
   deliveriesWebsitesCount: 'Delivered {count} websites',
   deliveriesCount: 'Delivered {count} items',
-  deliveriesViewChanges: 'View changes',
   deliveriesOpenWebsite: 'Open website',
   deliveriesMore: 'Show {count} more {kind}',
   deliveriesCollapse: 'Collapse',
@@ -59,6 +73,18 @@ export const zh: Record<ConversationLocaleKey, string> = {
   description: '在 DSH 原生对话界面中增强助手揭示和产物展示。',
   thinkAutoExpand: '自动展开思考',
   thinkAutoExpandHint: '思考块在流式时自动展开；关闭后保持折叠，可手动展开。',
+  mode: '揭示模式',
+  modeHint: 'typewriter 按字素逐字揭示；teleprompter 直接显示最新快照。',
+  modeTypewriter: '打字机',
+  modeTeleprompter: '即时',
+  preset: '平滑预设',
+  presetHint: '控制揭示节奏如何跟随模型流。',
+  presetRealtime: '实时',
+  presetBalanced: '均衡',
+  presetSilky: '丝滑',
+  revealSpeed: '揭示速度',
+  revealSpeedHint: 'typewriter 流式时的字素数/秒；收尾排空会更快。',
+  charsPerSecond: '字/秒',
   readOnly: '本部署的设置为只读。',
   loading: '正在加载插件设置…',
   unavailable: '当前连接无法访问插件设置。',
@@ -79,7 +105,6 @@ export const zh: Record<ConversationLocaleKey, string> = {
   deliveriesEdited: '已编辑 {count} 个文件',
   deliveriesWebsitesCount: '交付 {count} 个网站',
   deliveriesCount: '已交付 {count} 项产物',
-  deliveriesViewChanges: '查看更改',
   deliveriesOpenWebsite: '打开网站',
   deliveriesMore: '再显示 {count} 个{kind}',
   deliveriesCollapse: '收起',

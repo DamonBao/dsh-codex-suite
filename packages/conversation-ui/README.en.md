@@ -1,6 +1,6 @@
 # @jcy2387/dsh-conversation-ui
 
-This release targets Harness `0.2.1-rc.2`. The deliverables card uses an independent list entry alongside native file previews, change review, and other plugins’ Turn-tail contributions. Settings appear on the Suite or standalone bundle page. Assistant rows delegate to the native renderer; DSH owns work-details modes, tool groups, folding, and scrolling. Older Harness users should keep the corresponding older plugin version.
+This release targets Harness `0.2.1-rc.2`. The deliverables card uses an independent list entry; files defer to the native changed-files card when it is active, while the plugin adds websites without drawing a second file card. Settings appear on the Suite or standalone bundle page. Assistant rows delegate to the native renderer; DSH owns work-details modes, tool groups, folding, and scrolling. Older Harness users should keep the corresponding older plugin version.
 
 [![CI](https://github.com/DamonBao/dsh-codex-suite/actions/workflows/ci.yml/badge.svg)](https://github.com/DamonBao/dsh-codex-suite/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
@@ -17,17 +17,17 @@ A conversation enhancement plugin for DeepSeek Harness (DSH): progressive reveal
 
 - Compact, Standard, Detailed, and Verbose work-details modes retain DSH's native grouping, reasoning previews, and process disclosure.
 - The native assistant renderer owns Markdown, protected local images, attachments, file mentions, stopped markers, and final-answer actions.
-- Tool, retry, workflow, command, and context rows retain their native layout. The plugin does not mutate registered components or reparent rows with portals.
+- Tool, retry, workflow, command, and context rows retain their native layout. The plugin only wraps the winning assistant renderer in place, keeping its children, inject, store, and locale; it leaves other rows and portals untouched.
 
 ### Two streaming reveal modes
 
 | Mode | Behavior |
 | --- | --- |
-| `teleprompter` (default) | The latest model snapshot appears immediately, with no extra character-reveal queue. |
-| `typewriter` | Progressive reveal by grapheme cluster, safe for CJK text and emoji. |
+| `typewriter` (default) | Progressive reveal by grapheme cluster, safe for CJK text and emoji. |
+| `teleprompter` | The latest model snapshot appears immediately, with no extra character-reveal queue. |
 
 - Three smoothing presets: `realtime` (snappier), `balanced` (default), `silky` (extra smooth). Presets shape the reveal cadence — EMA-smoothed arrival rate, buffer targets, catch-up ceilings, and the settle drain after the input idles — so long replies never dump whole paragraphs at once and fast streams never stutter.
-- `typewriter` mode exposes a fixed reveal rate via `revealCharsPerSec`. Completion and interruption immediately display the full snapshot; loading history or switching sessions does not replay the animation.
+- `typewriter` mode exposes a fixed reveal rate via `revealCharsPerSec`. When the turn settles, the remaining reveal queue drains at a faster settle rate before switching to the full snapshot; stopped and failed turns use the same drain. Loading history or switching sessions does not replay the animation, and reduced motion shows the full snapshot immediately.
 
 ### Streaming viewport cooperation
 
@@ -36,11 +36,13 @@ A conversation enhancement plugin for DeepSeek Harness (DSH): progressive reveal
 
 ### Deliverables card
 
-- Every finished turn ends with a **deliverables** card: produced files and websites with added/removed line counts.
+- Every finished turn ends with a **deliverables** card: produced files and websites with real added/removed line counts.
+- While DSH’s native changed-files card is active (developer tools on and the turn has git changes), files belong to that card, including its diff preview and review; the plugin lists websites only so one turn never shows two file cards.
+- Relative and absolute spellings of the same file are merged, so the file is counted once.
 
 ### Plugin settings card
 
-- A durable **Auto-expand thinking** toggle in *Plugins → DSH Codex Suite (or Conversation UI)* (live; no restart needed).
+- Durable reveal mode (typewriter / teleprompter), smoothing preset (realtime / balanced / silky), reveal speed, and **Auto-expand thinking** controls in *Plugins → DSH Codex Suite (or Conversation UI)*; changes apply live without a restart.
 - The card also shows the current version and installation kind (npm / local development); npm installs get a one-click update action (restart required after updating).
 - Localized in Chinese and English.
 
@@ -49,7 +51,7 @@ A conversation enhancement plugin for DeepSeek Harness (DSH): progressive reveal
 Published package:
 
 ```sh
-dsh plugin --profile web add @jcy2387/dsh-conversation-ui@0.2.0-rc.2.1
+dsh plugin --profile web add @jcy2387/dsh-conversation-ui@0.2.1-rc.2
 dsh web
 ```
 
@@ -66,13 +68,13 @@ Native assistant enhancement activates automatically; existing session data stay
 
 ## Configuration
 
-Profile patch ID: `conversation-ui`. Set values in the profile's `cordis.patch.yml` overlay (the suite bundle defaults to `mode: teleprompter`, `preset: balanced`).
+Profile patch ID: `conversation-ui`. The overlay sets deployment defaults (the suite bundle defaults to `mode: typewriter`, `preset: balanced`); `mode`, `preset`, and `revealCharsPerSec` are also live, persistent settings in the plugin card.
 
 | Option | Range | Default | Notes |
 | --- | --- | --- | --- |
-| `mode` | `teleprompter` \| `typewriter` | `teleprompter` | Reveal style of assistant content. |
-| `preset` | `realtime` \| `balanced` \| `silky` | `balanced` | Smoothing cadence preset. |
-| `revealCharsPerSec` | 5–200 | `80` | Fixed reveal rate for `typewriter` mode. |
+| `mode` | `typewriter` \| `teleprompter` | `typewriter` | Deployment default reveal style; live-editable in the card. |
+| `preset` | `realtime` \| `balanced` \| `silky` | `balanced` | Deployment default smoothing preset; live-editable in the card. |
+| `revealCharsPerSec` | 5–200 | `80` | Deployment default reveal rate; live-editable in the card. |
 | `scrollSpeedPxPerSec` | 1–200 | `48` | Deprecated; retained for old Profile compatibility. DSH owns scrolling. |
 | `maxScrollSpeedPxPerSec` | 1–2000 | `1000` | Deprecated; retained for old Profile compatibility. DSH owns scrolling. |
 
@@ -103,7 +105,7 @@ The package ships a [`conversation-ui-off.yml`](conversation-ui-off.yml) overlay
 The package ships two halves that cooperate over one very narrow config channel:
 
 - **Host half** (`src/`): a Cordis plugin. It validates the config schema, injects the validated value into every served index HTML (the boot global `window.__DSH_CONVERSATION_UI_CONFIG__`), and registers the user-settings namespace plus a loopback-only settings RPC (read/write preferences, report installation kind, trigger an npm update).
-- **Web half** (`src/client/`): registers a thin `assistant-step` wrapper in `conversation.chat.node`, preserving the existing renderer's locale and injection while adjusting streaming text and native `useDisclosure`. It does not replace `conversation.view` or `turn-process`, or read host DOM. Deliveries use an independent `conversation.chat.turnTail` list entry; settings use `plugins.bundle.config`. Registration follows the slot declaration lifetime. An assistant renderer owning child slots or a Store remains unwrapped.
+- **Web half** (`src/client/`): wraps the winning `assistant-step` renderer in place in `conversation.chat.node`, preserving its children, inject, store, and locale while adjusting streaming text and native `useDisclosure`. It does not replace `conversation.view` or `turn-process`, or read host DOM. Deliveries use an independent `conversation.chat.turnTail` list entry; settings use `plugins.bundle.config`. Registration follows the slot declaration lifetime; the native entry's child slots, inject, store, and locale stay intact.
 
 ### Presentation after upgrading
 

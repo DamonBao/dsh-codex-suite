@@ -2,7 +2,7 @@
 
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { cleanup, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { Context } from '@deepseek-ai/cordis'
 import { SlotRegistry } from '@deepseek-ai/dsh-client-ui-renderer/client'
 import { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
@@ -20,6 +20,9 @@ const developmentView: ConversationSettingsView = {
   installation: 'development',
   writable: true,
   thinkAutoExpand: true,
+  mode: 'typewriter',
+  preset: 'balanced',
+  revealCharsPerSec: 80,
   canUpgrade: false,
 }
 
@@ -54,9 +57,11 @@ async function bench(options: BenchOptions = {}): Promise<{
       return { ok: true as const, value: view }
     }
     if (endpoint === CONVERSATION_SETTINGS_RPC.write) {
-      const value = (payload as { thinkAutoExpand?: unknown }).thinkAutoExpand
-      if (typeof value !== 'boolean') return { ok: false as const, error: { code: 'internal', message: 'bad payload' } }
-      view = { ...view, thinkAutoExpand: value }
+      const patch = payload as Partial<ConversationSettingsView>
+      if (typeof patch !== 'object' || patch === null) {
+        return { ok: false as const, error: { code: 'internal', message: 'bad payload' } }
+      }
+      view = { ...view, ...patch }
       return { ok: true as const, value: view }
     }
     if (endpoint === CONVERSATION_SETTINGS_RPC.upgrade) return { ok: true as const, value: { restartRequired: true } }
@@ -157,7 +162,7 @@ describe('conversation-ui settings card', () => {
     const face = cardFace(slots)
     await vi.waitFor(() => expect(face.hooks.conversationUiCard.getSnapshot().status).toBe('ready'))
 
-    face.edit(false)
+    face.edit({ thinkAutoExpand: false })
     expect(face.hooks.conversationUiCard.getSnapshot()).toMatchObject({ dirty: true, thinkAutoExpand: false })
     face.save()
     await vi.waitFor(() => {
@@ -168,6 +173,40 @@ describe('conversation-ui settings card', () => {
     })
     expect(call).toHaveBeenCalledWith(CONVERSATION_SETTINGS_RPC_CHANNEL, CONVERSATION_SETTINGS_RPC.write, {
       thinkAutoExpand: false,
+    })
+  })
+
+  it('edits reveal mode, preset, and speed from the card and saves them together', async () => {
+    const { ctx, slots, call } = await bench()
+    declareCardSlot(slots)
+    await ctx.plugin({ inject: [...inject], apply }).await()
+    const face = cardFace(slots)
+    await vi.waitFor(() => expect(face.hooks.conversationUiCard.getSnapshot().status).toBe('ready'))
+    const view = render(<ConversationCard {...cardProps(face)} />)
+
+    fireEvent.change(view.getAllByRole('combobox')[0]!, { target: { value: 'teleprompter' } })
+    fireEvent.change(view.getAllByRole('combobox')[1]!, { target: { value: 'silky' } })
+    fireEvent.change(view.getByRole('slider'), { target: { value: '120' } })
+    expect(face.hooks.conversationUiCard.getSnapshot()).toMatchObject({
+      dirty: true,
+      mode: 'teleprompter',
+      preset: 'silky',
+      revealCharsPerSec: 120,
+    })
+
+    face.save()
+    await vi.waitFor(() => {
+      expect(face.hooks.conversationUiCard.getSnapshot()).toMatchObject({
+        dirty: false,
+        mode: 'teleprompter',
+        preset: 'silky',
+        revealCharsPerSec: 120,
+      })
+    })
+    expect(call).toHaveBeenLastCalledWith(CONVERSATION_SETTINGS_RPC_CHANNEL, CONVERSATION_SETTINGS_RPC.write, {
+      mode: 'teleprompter',
+      preset: 'silky',
+      revealCharsPerSec: 120,
     })
   })
 

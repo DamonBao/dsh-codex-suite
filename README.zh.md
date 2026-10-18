@@ -37,10 +37,10 @@
 **Conversation UI —— 在 DSH 原生对话中增强**
 
 - **原生呈现。** 工具分组、工作步骤展示模式、过程折叠、运行状态和视口恢复由 DSH 管理。
-- **两种揭示模式。** `teleprompter`（默认）直接显示最新快照；`typewriter` 按字素揭示，可选三种预设和速度。完成或停止后立即显示完整快照。
+- **两种揭示模式。** `typewriter`（默认）按字素揭示，可选三种预设和速度；`teleprompter` 直接显示最新快照。回合结束后剩余队列以更快的收尾速率排空，再切换到完整快照；停止、失败和减少动态效果同样保证不丢内容。
 - **思考偏好。** 持久化的自动展开设置作用于原生流式思考，用户仍可手动折叠。
 - **原生助手功能。** Markdown、图片、文件引用、停止标记和最终答复操作保留 DSH 行为。
-- **产物卡片。** 完成回合展示文件编辑和网站，与原生文件预览共存；插件不扫描或隐藏原生行。
+- **产物卡片。** 完成回合展示文件编辑和网站，附真实增删行数；原生 changed-files 卡启用时文件交给原生卡（含 diff 预览与审阅），插件只补网站，避免同一回合两张文件卡。相对/绝对路径会归一化合并，同一文件只计一次。
 
 ---
 
@@ -55,15 +55,15 @@
 **安装整套 Suite（推荐）：**
 
 ```sh
-dsh plugin --profile web add @jcy2387/dsh-suite@0.2.0-rc.2.1
+dsh plugin --profile web add @jcy2387/dsh-suite@0.2.1-rc.2
 dsh web
 ```
 
 **或单独安装插件：**
 
 ```sh
-dsh plugin --profile web add @jcy2387/dsh-codex-provider@0.2.0-rc.2.1
-dsh plugin --profile web add @jcy2387/dsh-conversation-ui@0.2.0-rc.2.1
+dsh plugin --profile web add @jcy2387/dsh-codex-provider@0.2.1-rc.2
+dsh plugin --profile web add @jcy2387/dsh-conversation-ui@0.2.1-rc.2
 dsh web
 ```
 
@@ -88,7 +88,7 @@ dsh web
 
 ## 配置
 
-两个插件都通过 profile 的 `cordis.patch.yml` overlay 配置；用户级偏好保存在设置界面并跨重启持久化。
+两个插件都通过 profile 的 `cordis.patch.yml` overlay 配置部署默认值；Conversation UI 的 `mode`、`preset`、`revealCharsPerSec` 和「自动展开思考」同时可在插件设置卡中实时修改并跨重启持久化。
 
 **Codex Provider**（profile patch ID：`codex-provider`）
 
@@ -107,9 +107,9 @@ dsh web
 
 | 选项 | 取值 | 默认 | 说明 |
 | --- | --- | --- | --- |
-| `mode` | `teleprompter` \| `typewriter` | `teleprompter` | 助手内容的揭示风格。 |
-| `preset` | `realtime` \| `balanced` \| `silky` | `balanced` | 平滑节奏档位。 |
-| `revealCharsPerSec` | 5–200 | `80` | 打字机揭示速度。 |
+| `mode` | `typewriter` \| `teleprompter` | `typewriter` | 部署默认揭示风格；也可在设置卡中实时修改。 |
+| `preset` | `realtime` \| `balanced` \| `silky` | `balanced` | 部署默认平滑节奏；也可在设置卡中实时修改。 |
+| `revealCharsPerSec` | 5–200 | `80` | 打字机揭示速度；也可在设置卡中实时修改。 |
 | `scrollSpeedPxPerSec` | 1–200 | `48` | 已弃用的兼容字段；滚动由 DSH 管理。 |
 | `maxScrollSpeedPxPerSec` | 1–2000 | `1000` | 已弃用的兼容字段；滚动由 DSH 管理。 |
 
@@ -125,7 +125,7 @@ dsh web
 | 位置 | 可控内容 |
 | --- | --- |
 | 插件 → DSH Codex Suite → codex-provider | 连接/断开账号、登录方式、用量面板、重置次数查看与兑换、代理模式。 |
-| 插件 → DSH Codex Suite（或 Conversation UI） | 自动展开思考（实时生效）、插件版本、npm 安装一键更新。 |
+| 插件 → DSH Codex Suite（或 Conversation UI） | 揭示模式、平滑预设、揭示速度、自动展开思考（均实时生效）、插件版本、npm 安装一键更新。 |
 
 ## 架构
 

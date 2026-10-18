@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useSyncExternalStore } from 'react'
 import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
 import type { TurnTailOwnerProps } from '@deepseek-ai/dsh-client-ui-chat/client'
 import {
@@ -7,7 +7,8 @@ import {
   IconGlobeOutlineMedium,
   IconProjectAddOutlineMedium,
 } from '@deepseek-ai/dsh-client-ui-primitives'
-import { selectDeliverables, type DeliverableEntry } from './deliverables.ts'
+import { nativeDeliverablesPresent, selectDeliverables, type DeliverableEntry } from './deliverables.ts'
+import { developerTools } from './developer-tools.ts'
 import css from './DeliverablesCard.module.css'
 
 type DeliverablesTailProps = TurnTailOwnerProps & PropsLocale<'settings.conversationUi'>
@@ -30,6 +31,38 @@ function pathParts(path: string): { parent: string; name: string } {
   return { parent: path.slice(0, separator + 1), name: path.slice(separator + 1) }
 }
 
+function isAbsolutePath(path: string): boolean {
+  return path.startsWith('/') || /^[A-Za-z]:[\\/]/.test(path)
+}
+
+/** First segments from relative entries, used to trim absolute siblings. */
+function relativePrefixes(entries: readonly DeliverableEntry[]): readonly string[] {
+  const prefixes = new Set<string>()
+  for (const entry of entries) {
+    if (isWebsite(entry) || isAbsolutePath(entry.path)) continue
+    const first = entry.path.replaceAll('\\', '/').split('/')[0]
+    if (first !== undefined && first !== '' && first !== '.' && first !== '..') prefixes.add(first)
+  }
+  return [...prefixes]
+}
+
+/**
+ * Prefer the workspace-relative spelling for display. The slot owner does not
+ * expose the session cwd, but a sibling relative entry identifies the first
+ * path segment (`packages`, `src`, ...), which is enough to trim an absolute
+ * tool-reported path without changing the path used for `openFile`.
+ */
+function displayPath(path: string, prefixes: readonly string[]): string {
+  if (!isAbsolutePath(path)) return path
+  const normalized = path.replaceAll('\\', '/')
+  for (const prefix of prefixes) {
+    const marker = `/${prefix}/`
+    const index = normalized.indexOf(marker)
+    if (index >= 0) return normalized.slice(index + 1)
+  }
+  return path
+}
+
 function hiddenKindLabel(entries: readonly DeliverableEntry[], t: DeliverablesTailProps['t']): string {
   if (entries.every(isWebsite)) return t('deliveriesWebsites')
   if (entries.every(entry => !isWebsite(entry))) return t('deliveriesFiles')
@@ -47,7 +80,17 @@ function countLabel(entries: readonly DeliverableEntry[], t: DeliverablesTailPro
 /** Render this list contribution only when its Turn has delivered files or websites. */
 export function DeliverablesTail(props: DeliverablesTailProps) {
   const matched = selectDeliverables(props)
-  return matched === null ? null : <DeliverablesCard {...props} matched={matched} />
+  const showNativeFiles = useSyncExternalStore(
+    developerTools.subscribe,
+    developerTools.getSnapshot,
+    developerTools.getSnapshot,
+  ) && nativeDeliverablesPresent(props)
+  if (matched === null) return null
+  // DSH's own changed-files card owns files while developer tools are on;
+  // adding the same files here would show two cards for one Turn. Websites
+  // have no native owner, so they stay in the plugin card.
+  const entries = showNativeFiles ? matched.filter(isWebsite) : matched
+  return entries.length === 0 ? null : <DeliverablesCard {...props} matched={entries} />
 }
 
 /** Codex-style turn-tail card for edited files and deployed websites. */
@@ -58,6 +101,7 @@ export function DeliverablesCard({ matched: entries, openFile, t }: Deliverables
   const summary = countLabel(entries, t)
   const hasFiles = entries.some(entry => !isWebsite(entry))
   const firstWebsite = entries.find(isWebsite)
+  const prefixes = relativePrefixes(entries)
   return (
     <section className={css.root} data-stream-deliverables-card data-stream-deliverables-count={entries.length}>
       <div className={css.header}>
@@ -66,11 +110,7 @@ export function DeliverablesCard({ matched: entries, openFile, t }: Deliverables
         </span>
         <div className={css.heading}>
           <strong className={css.title}>{summary}</strong>
-          {hasFiles ? (
-            <button type="button" className={css.subtitle} onClick={() => { setExpanded(true) }}>
-              {t('deliveriesViewChanges')} ↗
-            </button>
-          ) : firstWebsite !== undefined ? (
+          {!hasFiles && firstWebsite !== undefined ? (
             <button type="button" className={css.subtitle} onClick={() => { openWebsite(firstWebsite.path) }}>
               {t('deliveriesOpenWebsite')} ↗
             </button>
@@ -80,7 +120,8 @@ export function DeliverablesCard({ matched: entries, openFile, t }: Deliverables
       <div className={css.list}>
         {visible.map(entry => {
           const website = isWebsite(entry)
-          const parts = pathParts(entry.path)
+          const display = displayPath(entry.path, prefixes)
+          const parts = pathParts(display)
           return (
             <button
               key={`${entry.kind}:${entry.path}`}
@@ -94,7 +135,7 @@ export function DeliverablesCard({ matched: entries, openFile, t }: Deliverables
               ) : (
                 <span className={css.filePath}>
                   {parts.parent !== '' && <span className={css.parentPath}>{parts.parent}</span>}
-                  <span className={css.fileName}>{parts.name || entry.path}</span>
+                  <span className={css.fileName}>{parts.name || display}</span>
                 </span>
               )}
               {!website && (entry.added > 0 || entry.removed > 0) && (

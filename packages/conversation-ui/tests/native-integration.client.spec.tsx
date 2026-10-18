@@ -11,6 +11,8 @@ import { applyNativeChat } from './support/ui-chat-client.ts'
 import { apply, inject } from '../src/client/index.ts'
 import { CONVERSATION_BOOT_GLOBAL, DEFAULT_CONVERSATION_CONFIG } from '../src/config.ts'
 import { enhanceNativeAssistant } from '../src/client/NativeAssistantEnhancement.tsx'
+import { developerTools } from '../src/client/developer-tools.ts'
+import type { ConversationSettings } from '../src/settings.ts'
 
 type AssistantProps = ChatNodeViewProps<'assistant-step'> & {
   renderSlot?: (name: string, owner: Record<string, unknown>) => unknown
@@ -31,7 +33,11 @@ async function bench(pluginFirst = false) {
   const locale = new LocaleRuntime(ctx)
   ctx.provide('locale', locale)
   const settings = createSnapshotStore({ value: { transcriptView: 'standard' } })
-  ctx.provide('configForms', { get: () => ({ ...settings, set: () => Promise.resolve() }) } as never)
+  const developerToolsStore = createSnapshotStore(false)
+  ctx.provide('configForms', {
+    get: () => ({ ...settings, set: () => Promise.resolve() }),
+    developerTools: { enabled: developerToolsStore },
+  } as never)
   const definition = vi.fn(() => () => {})
   ctx.provide('uiConversation', {
     events: { register: definition, registerFallback: definition },
@@ -50,7 +56,7 @@ async function bench(pluginFirst = false) {
   await native.await()
   const plugin = overlay ?? ctx.plugin({ inject: [...inject], apply })
   await plugin.await()
-  return { ctx, locale, settings, native, plugin, definition }
+  return { ctx, locale, settings, developerToolsStore, native, plugin, definition }
 }
 
 function entry(ctx: Context): StoredEntry {
@@ -113,6 +119,13 @@ function renderAssistant(ctx: Context, owner: AssistantProps) {
 }
 
 describe('native Chat integration', () => {
+  it('mirrors the shared developer-tools switch for native card arbitration', async () => {
+    const { developerToolsStore } = await bench()
+    expect(developerTools.getSnapshot()).toBe(false)
+    await act(async () => { developerToolsStore.set(true) })
+    expect(developerTools.getSnapshot()).toBe(true)
+  })
+
   it.each([false, true])('keeps all native components and child seats intact (plugin first: %s)', async (first) => {
     const { ctx, plugin } = await bench(first)
     const assistant = entry(ctx)
@@ -208,6 +221,10 @@ describe('native Chat integration', () => {
     expect(partial.length).toBeGreaterThan(0)
     expect(partial.length).toBeLessThan(120)
     view.rerender(<view.Renderer {...appended} node={{ ...appended.node, data: { ...appended.node.data, status: 'settled' } }} />)
+    // Settling no longer drops the queue: the already-typed prefix stays on
+    // screen while the remainder drains at the faster settle rate.
+    expect(view.container.textContent).not.toBe('A👩‍💻'.repeat(20))
+    await act(() => vi.advanceTimersByTimeAsync(1000))
     expect(view.container.textContent).toBe('A👩‍💻'.repeat(20))
     view.rerender(<view.Renderer {...props(ctx, 'Historical answer', { status: 'settled', sessionId: 'session-2' })} />)
     expect(view.container.textContent).toBe('Historical answer')
@@ -225,18 +242,56 @@ describe('native Chat integration', () => {
   it('applies live preferences through the native disclosure without remounting it', async () => {
     const { ctx, plugin } = await bench()
     await plugin.dispose()
-    const preference = createSnapshotStore(false)
+    const preference = createSnapshotStore({
+      thinkAutoExpand: false,
+      mode: DEFAULT_CONVERSATION_CONFIG.mode,
+      preset: DEFAULT_CONVERSATION_CONFIG.preset,
+      revealCharsPerSec: DEFAULT_CONVERSATION_CONFIG.revealCharsPerSec,
+    })
     const Native = entry(ctx).component as FunctionComponent<AssistantProps>
-    const Renderer = enhanceNativeAssistant(Native as never, DEFAULT_CONVERSATION_CONFIG, preference)
+    const Renderer = enhanceNativeAssistant(Native as never, preference)
     const owner = props(ctx, 'Response', { reasoning: 'Live thinking' })
     const view = render(<Renderer {...owner} />)
     const row = view.container.querySelector('[data-variant="think"]')!
     expect(row.getAttribute('data-expanded')).toBeNull()
-    await act(async () => { preference.set(true) })
+    await act(async () => { preference.set({ ...preference.getSnapshot(), thinkAutoExpand: true }) })
     expect(row.getAttribute('data-expanded')).toBe('true')
-    await act(async () => { preference.set(false) })
+    await act(async () => { preference.set({ ...preference.getSnapshot(), thinkAutoExpand: false }) })
     expect(row.getAttribute('data-expanded')).toBeNull()
     expect(view.container.querySelector('[data-variant="think"]')).toBe(row)
+  })
+
+  it('applies a live reveal-mode change without remounting the assistant row', async () => {
+    vi.useFakeTimers({ toFake: ['requestAnimationFrame', 'cancelAnimationFrame', 'performance', 'Date'] })
+    const { ctx } = await bench()
+    const preference = createSnapshotStore<ConversationSettings>({
+      thinkAutoExpand: true,
+      mode: 'typewriter',
+      preset: 'balanced',
+      revealCharsPerSec: 20,
+    })
+    const Seen = (props: AssistantProps) => createElement(
+      'div',
+      null,
+      props.node.data.blocks.map(block => block.kind === 'text' ? block.text : '').join(''),
+    )
+    const Renderer = enhanceNativeAssistant(Seen as never, preference)
+    const owner = props(ctx, '')
+    const view = render(<Renderer {...owner} />)
+    const appended = {
+      ...owner,
+      node: {
+        ...owner.node,
+        data: { ...owner.node.data, blocks: [{ kind: 'text' as const, text: 'x'.repeat(80) }] },
+      },
+    }
+    view.rerender(<Renderer {...appended} />)
+    await act(() => vi.advanceTimersByTimeAsync(120))
+    expect(view.container.textContent!.length).toBeLessThan(80)
+    await act(async () => {
+      preference.set({ ...preference.getSnapshot(), mode: 'teleprompter' })
+    })
+    expect(view.container.textContent).toBe('x'.repeat(80))
   })
 
   it('bypasses the reveal queue when reduced motion is enabled during a stream', async () => {

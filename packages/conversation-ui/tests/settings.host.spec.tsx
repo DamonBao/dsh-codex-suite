@@ -7,7 +7,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 import { Context } from '@deepseek-ai/cordis'
 import { mountSettingsProfile } from './support/settings-profile.ts'
 import { afterEach, describe, expect, it, onTestFinished } from 'vitest'
-import { CONVERSATION_PACKAGE_NAME, CONVERSATION_PACKAGE_VERSION } from '../src/package-meta.ts'
+import { CONVERSATION_PACKAGE_NAME, CONVERSATION_PACKAGE_VERSION, CONVERSATION_SUITE_PACKAGE_NAME } from '../src/package-meta.ts'
 import { apply, Config } from '../src/plugin.ts'
 import { CONVERSATION_SETTINGS_RPC, CONVERSATION_SETTINGS_RPC_CHANNEL } from '../src/settings-api.ts'
 import { CONVERSATION_SETTINGS_NS, DEFAULT_CONVERSATION_SETTINGS } from '../src/settings.ts'
@@ -30,14 +30,18 @@ afterEach(() => {
   tempProfiles.clear()
 })
 
-function profileBaseUrl(specifier: string, bundled = true): string {
+function profileBaseUrl(
+  specifier: string,
+  bundled = true,
+  packageName = CONVERSATION_PACKAGE_NAME,
+): string {
   const directory = mkdtempSync(join(tmpdir(), 'dsh-conversation-ui-profile-'))
   tempProfiles.add(directory)
   writeFileSync(join(directory, 'package.json'), JSON.stringify({
     name: 'dsh-profile-test',
     private: true,
-    dsh: { profile: { bundles: bundled ? [CONVERSATION_PACKAGE_NAME] : [] } },
-    dependencies: { [CONVERSATION_PACKAGE_NAME]: specifier },
+    dsh: { profile: { bundles: bundled ? [packageName] : [] } },
+    dependencies: { [packageName]: specifier },
   }), 'utf8')
   return `${pathToFileURL(directory).href}/`
 }
@@ -135,7 +139,10 @@ describe('conversation-ui host settings', () => {
     expect(ctx.settings.describe().find(row => row.ns === ns)?.value).toEqual(DEFAULT_CONVERSATION_SETTINGS)
 
     await ctx.settings.update(ns, { thinkAutoExpand: false })
-    expect(ctx.settings.describe().find(row => row.ns === ns)?.value).toEqual({ thinkAutoExpand: false })
+    expect(ctx.settings.describe().find(row => row.ns === ns)?.value).toEqual({
+      ...DEFAULT_CONVERSATION_SETTINGS,
+      thinkAutoExpand: false,
+    })
 
     await expect(ctx.settings.update(ns, { thinkAutoExpand: 'nope' })).rejects.toThrow()
 
@@ -155,17 +162,37 @@ describe('conversation-ui host settings', () => {
         version: CONVERSATION_PACKAGE_VERSION,
         installation: 'unmanaged',
         writable: true,
-        thinkAutoExpand: DEFAULT_CONVERSATION_SETTINGS.thinkAutoExpand,
+        ...DEFAULT_CONVERSATION_SETTINGS,
         canUpgrade: false,
       },
     })
 
     const updated = await callRpc(route, CONVERSATION_SETTINGS_RPC.write, { thinkAutoExpand: false })
     expect(updated.result).toMatchObject({ ok: true, value: { thinkAutoExpand: false } })
-    expect(ctx.settings.describe().find(row => row.ns === CONVERSATION_SETTINGS_NS)?.value).toEqual({ thinkAutoExpand: false })
+    expect(ctx.settings.describe().find(row => row.ns === CONVERSATION_SETTINGS_NS)?.value).toEqual({
+      ...DEFAULT_CONVERSATION_SETTINGS,
+      thinkAutoExpand: false,
+    })
+
+    const reveal = await callRpc(route, CONVERSATION_SETTINGS_RPC.write, {
+      mode: 'teleprompter',
+      preset: 'silky',
+      revealCharsPerSec: 120,
+    })
+    expect(reveal.result).toMatchObject({
+      ok: true,
+      value: { mode: 'teleprompter', preset: 'silky', revealCharsPerSec: 120 },
+    })
+    expect(ctx.settings.describe().find(row => row.ns === CONVERSATION_SETTINGS_NS)?.value).toMatchObject({
+      mode: 'teleprompter',
+      preset: 'silky',
+      revealCharsPerSec: 120,
+    })
 
     const malformed = await callRpc(route, CONVERSATION_SETTINGS_RPC.write, { thinkAutoExpand: 'false' })
     expect(malformed.result).toMatchObject({ ok: false, error: { code: 'settings-rejected' } })
+    const malformedMode = await callRpc(route, CONVERSATION_SETTINGS_RPC.write, { mode: 'diagonal' })
+    expect(malformedMode.result).toMatchObject({ ok: false, error: { code: 'settings-rejected' } })
 
     const blockedUpdate = await callRpc(route, CONVERSATION_SETTINGS_RPC.upgrade, {})
     expect(blockedUpdate.result).toMatchObject({ ok: false, error: { code: 'internal' } })
@@ -194,6 +221,22 @@ describe('conversation-ui host settings', () => {
       value: { installation: 'npm', canUpgrade: true },
     })
     await npmAlias.fiber.dispose()
+
+    const suite = await mountHost(profileBaseUrl('^0.2.0', true, CONVERSATION_SUITE_PACKAGE_NAME))
+    const suiteRead = await callRpc(suite.route, CONVERSATION_SETTINGS_RPC.read, {})
+    expect(suiteRead.result).toMatchObject({
+      ok: true,
+      value: { installation: 'npm', canUpgrade: true },
+    })
+    await suite.fiber.dispose()
+
+    const suiteDevelopment = await mountHost(profileBaseUrl('link:./suite-source', true, CONVERSATION_SUITE_PACKAGE_NAME))
+    const suiteDevelopmentRead = await callRpc(suiteDevelopment.route, CONVERSATION_SETTINGS_RPC.read, {})
+    expect(suiteDevelopmentRead.result).toMatchObject({
+      ok: true,
+      value: { installation: 'development', canUpgrade: false },
+    })
+    await suiteDevelopment.fiber.dispose()
 
     const localAlias = await mountHost(profileBaseUrl(`npm:${CONVERSATION_PACKAGE_NAME}@file:../conversation-ui`))
     const localAliasRead = await callRpc(localAlias.route, CONVERSATION_SETTINGS_RPC.read, {})

@@ -137,6 +137,9 @@ importers:
 
   packages/conversation-ui:
     dependencies:
+      diff:
+        specifier: ^9.0.0
+        version: 9.0.0
       yaml:
         specifier: ^2.8.1
         version: 2.9.1
@@ -240,9 +243,6 @@ importers:
       clsx:
         specifier: ^2.1.1
         version: 2.1.1
-      diff:
-        specifier: ^9.0.0
-        version: 9.0.0
       immer:
         specifier: ^10.1.1
         version: 10.1.1
