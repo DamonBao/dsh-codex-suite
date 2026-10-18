@@ -77,7 +77,8 @@ describe('Codex provider plugin', () => {
     await ctx.settings.update('codex-provider', { proxyMode: 'off' })
     expect(ctx.settings.describe().find(row => row.ns === 'codex-provider')?.value).toEqual({ proxyMode: 'off' })
 
-    expect(ctx.llm.listProviders()).toEqual([{ id: 'openai-codex', name: 'OpenAI Codex' }])
+    // pi-ai 1.x renamed the Codex SSE/WebSocket route's display name.
+    expect(ctx.llm.listProviders()).toEqual([{ id: 'openai-codex', name: 'OpenAI Codex (legacy)' }])
     const models = await ctx.llm.listModels('openai-codex')
     expect(models.length).toBeGreaterThan(0)
     for (const model of models) {

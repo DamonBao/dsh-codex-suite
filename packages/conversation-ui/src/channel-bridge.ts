@@ -7,7 +7,7 @@
  * service's own context, which no longer injects it — an external caller's
  * registration dies with `cannot get property "webServer" without inject`.
  * So the plugin mounts the identical prefix route itself: the same trust fence
- * (`connection.requestRejection`) and the same unary wire envelope the
+ * (`connection.admit`) and the same unary wire envelope the
  * Connection carrier serves, keeping the browser half's `rpc.call(channel, …)`
  * contract byte-for-byte unchanged.
  */
@@ -130,11 +130,12 @@ async function serveChannelRoute(
   res: ServerResponse,
 ): Promise<void> {
   // Connection's Host/Origin fence and browser-session authentication, exactly
-  // as the carrier applies them to a dedicated channel.
-  const rejection = mountCtx.connection.requestRejection(req)
-  if (rejection !== undefined) {
-    res.writeHead(rejection)
-    res.end(rejection === 401 ? 'unauthorized' : 'forbidden')
+  // as the carrier applies them to a dedicated channel; the admitted Peer is
+  // the handler's caller identity since dsh 0.2.1.
+  const admission = mountCtx.connection.admit(req)
+  if ('rejection' in admission) {
+    res.writeHead(admission.rejection)
+    res.end(admission.rejection === 401 ? 'unauthorized' : 'forbidden')
     return
   }
   const url = new URL(req.url ?? '/', 'http://dsh.internal')
@@ -179,7 +180,7 @@ async function serveChannelRoute(
     if (!res.writableEnded) abort.abort()
   })
   try {
-    const result = await handler(endpoint, message.payload, abort.signal, mountCtx.connection.operator)
+    const result = await handler(endpoint, message.payload, abort.signal, admission.peer)
     sendJson(res, 200, { type: 'server-response', rpcId: message.rpcId, result })
   } catch (error) {
     sendText(res, 500, `handler failure: ${String(error)}`)

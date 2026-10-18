@@ -1,6 +1,6 @@
 import { createElement, useCallback, useEffect, useMemo, useSyncExternalStore, type ComponentType, type FunctionComponent } from 'react'
 import type { Context } from '@deepseek-ai/cordis'
-import type { StoredEntry, LocaleNamespaceMap } from '@deepseek-ai/dsh-client-ui-slots'
+import type { StoredEntry } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ChatNodeViewProps, UseDisclosure } from '@deepseek-ai/dsh-client-ui-chat/client'
 import type { ConversationConfig } from '../config.ts'
 import { useConversationContent } from './useConversationContent.ts'
@@ -92,53 +92,40 @@ export function enhanceNativeAssistant(
   })
 }
 
-const REGISTRANT = 'dsh-conversation-ui:assistant-enhancement'
-
 /**
- * Use the public keyed replacement seat without mutating stored registrations.
- * The existing renderer's injection and locale travel with the delegated
- * component; load/unload order is handled by the slot declaration lifetime.
+ * Enhance the winning assistant renderer in place. dsh 0.2.1 gives the native
+ * assistant entry its own child slots (reasoning body, message images), which
+ * a separate shadowing registration could not carry; swapping the entry's
+ * component keeps children, inject, store, and locale seats untouched while
+ * the enhancement delegates every visual to the native renderer.
  * @param ctx - browser context with the slot registry.
  * @param config - validated reveal configuration.
  * @param preference - live auto-expand preference.
- * @returns disposer for the assistant contribution and registration listener.
+ * @returns disposer restoring the original component.
  */
 export function registerAssistantEnhancement(ctx: Context, config: ConversationConfig, preference: ThinkingPreference): () => void {
-  let original: StoredEntry | undefined
-  let dispose: (() => void) | undefined
-  let changing = false
+  let target: StoredEntry | undefined
+  let original: unknown
+  const restore = (): void => {
+    if (target !== undefined) target.component = original
+    target = undefined
+    original = undefined
+  }
   const reconcile = (): void => {
-    if (changing) return
-    const next = ctx.slots.entries('conversation.chat.node').find(entry =>
-      entry.options.key === 'assistant-step' && entry.registrant !== REGISTRANT)
-    if (next === original) return
-    changing = true
-    try {
-      dispose?.()
-      dispose = undefined
-      original = next
-      if (next === undefined) return
-      // A renderer that owns child slots cannot be delegated from a different
-      // registration. Leave that renderer native rather than losing its seats.
-      if (next.children !== undefined || next.store !== undefined) return
-      // The registry erases injection parameters after validating registration.
-      const originalInject = next.inject as ((sessionId: AssistantProps['sessionId']) => Record<string, unknown>) | undefined
-      const component = enhanceNativeAssistant(next.component as ComponentType<AssistantProps>, config, preference)
-      dispose = ctx.slots.register({
-        name: 'conversation.chat.node',
-        key: 'assistant-step',
-        priority: (next.options.priority ?? 0) - 1,
-        registrant: REGISTRANT,
-        ...(next.locale === undefined ? {} : { locale: next.locale as keyof LocaleNamespaceMap }),
-        inject: (sessionId: AssistantProps['sessionId']) => originalInject?.(sessionId) ?? {},
-      }, component)
-    } finally {
-      changing = false
-    }
+    // Lowest priority renders, and entries arrive sorted ascending.
+    const winner = ctx.slots.entries('conversation.chat.node').find(entry => entry.options.key === 'assistant-step')
+    if (winner === target) return
+    restore()
+    // Memoized native renderers are objects, plain components functions.
+    if (winner === undefined || winner.component === null
+      || (typeof winner.component !== 'function' && typeof winner.component !== 'object')) return
+    target = winner
+    original = winner.component
+    winner.component = enhanceNativeAssistant(original as ComponentType<AssistantProps>, config, preference)
   }
   const off = ctx.on('slots/changed', (name: string) => {
     if (name === 'conversation.chat.node') reconcile()
   })
-  try { reconcile() } catch (error) { off(); throw error }
-  return () => { off(); dispose?.() }
+  try { reconcile() } catch (error) { off(); restore(); throw error }
+  return () => { off(); restore() }
 }

@@ -56,7 +56,7 @@ async function mountHost(baseUrl: string, inspectSource = true): Promise<{
   // The plugin fences its own route through the connection service and mounts
   // it on the webServer (dsh 0.1.5: dedicated channels are plugin-served).
   ctx.provide('connection', {
-    requestRejection: () => undefined,
+    admit: () => ({ peer: {} }),
   } as never)
   ctx.provide('webServer', {
     register(route: RouteRegistration): () => void {

@@ -1,6 +1,6 @@
 # @jcy2387/dsh-conversation-ui
 
-This release targets Harness `0.2.0-rc.2`. The deliverables card uses an independent list entry alongside native file previews, change review, and other plugins’ Turn-tail contributions. Settings appear on the Suite or standalone bundle page. Assistant rows delegate to the native renderer; DSH owns work-details modes, tool groups, folding, and scrolling. Older Harness users should keep the corresponding older plugin version.
+This release targets Harness `0.2.1-rc.2`. The deliverables card uses an independent list entry alongside native file previews, change review, and other plugins’ Turn-tail contributions. Settings appear on the Suite or standalone bundle page. Assistant rows delegate to the native renderer; DSH owns work-details modes, tool groups, folding, and scrolling. Older Harness users should keep the corresponding older plugin version.
 
 [![CI](https://github.com/DamonBao/dsh-codex-suite/actions/workflows/ci.yml/badge.svg)](https://github.com/DamonBao/dsh-codex-suite/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
@@ -123,4 +123,4 @@ Tests run on vitest + Testing Library, loading the published DSH Chat factory an
 
 [MIT](LICENSE) © jcy2387
 
-This release targets DSH `0.2.0-rc.2`. It imports `conversation-ui.thinkAutoExpand` from `settings.yaml` or `settings.yaml.imported` into the active profile’s `cordis.patch.yml`, recording a marker after success and retaining the source after failure. The plugin’s compatibility import fills only missing values. Exported `locale/en.json` and `locale/zh.json` localize the name and description in DSH.
+This release targets DSH `0.2.1-rc.2`. It imports `conversation-ui.thinkAutoExpand` from `settings.yaml` or `settings.yaml.imported` into the active profile’s `cordis.patch.yml`, recording a marker after success and retaining the source after failure. The plugin’s compatibility import fills only missing values. Exported `locale/en.json` and `locale/zh.json` localize the name and description in DSH.

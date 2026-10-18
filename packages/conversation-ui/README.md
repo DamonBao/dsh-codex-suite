@@ -1,6 +1,6 @@
 # @jcy2387/dsh-conversation-ui
 
-本版本面向 Harness `0.2.0-rc.2`。产物卡片使用列表插槽中的独立条目，与原生文件预览、变更审阅及其他插件的回合尾部内容共存；插件设置位于 Suite 或独立插件的配置页。助手行委托原生组件渲染，工作步骤展示模式、工具分组、折叠和滚动由 DSH 管理。旧版 Harness 用户应继续使用对应旧版插件。
+本版本面向 Harness `0.2.1-rc.2`。产物卡片使用列表插槽中的独立条目，与原生文件预览、变更审阅及其他插件的回合尾部内容共存；插件设置位于 Suite 或独立插件的配置页。助手行委托原生组件渲染，工作步骤展示模式、工具分组、折叠和滚动由 DSH 管理。旧版 Harness 用户应继续使用对应旧版插件。
 
 [![CI](https://github.com/DamonBao/dsh-codex-suite/actions/workflows/ci.yml/badge.svg)](https://github.com/DamonBao/dsh-codex-suite/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
@@ -123,4 +123,4 @@ pnpm --filter @jcy2387/dsh-conversation-ui build
 
 [MIT](LICENSE) © jcy2387
 
-本版面向 DSH `0.2.0-rc.2`。旧 `conversation-ui.thinkAutoExpand` 从 `settings.yaml` 或 `settings.yaml.imported` 导入当前 profile 的 `cordis.patch.yml`，成功后记录迁移标记；失败保留源文件供重试。插件兼容导入只补充缺失的值。名称和描述通过导出的 `locale/en.json`、`locale/zh.json` 跟随 DSH 界面语言。
+本版面向 DSH `0.2.1-rc.2`。旧 `conversation-ui.thinkAutoExpand` 从 `settings.yaml` 或 `settings.yaml.imported` 导入当前 profile 的 `cordis.patch.yml`，成功后记录迁移标记；失败保留源文件供重试。插件兼容导入只补充缺失的值。名称和描述通过导出的 `locale/en.json`、`locale/zh.json` 跟随 DSH 界面语言。

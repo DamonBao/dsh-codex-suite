@@ -7,7 +7,7 @@
 
 English | [简体中文](README.zh.md)
 
-A suite of [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) (DSH) plugins that brings **ChatGPT/OpenAI Codex models** and a **Codex-style conversation experience** to the DSH Web UI. Built against DSH `0.2.0-rc.2` (peer range `>=0.2.0-rc.2 <0.3.0-0`).
+A suite of [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) (DSH) plugins that brings **ChatGPT/OpenAI Codex models** and a **Codex-style conversation experience** to the DSH Web UI. Built against DSH `0.2.1-rc.2` (peer range `>=0.2.0-rc.2 <0.3.0-0`).
 
 The repository is a pnpm monorepo containing two independent runtime plugins and one pure bundle package:
 
@@ -138,9 +138,9 @@ The halves communicate through two narrow channels: an inline **boot-config glob
 
 Package-level docs: [codex-provider](packages/codex-provider/README.md) · [conversation-ui](packages/conversation-ui/README.en.md) · [suite](packages/all/README.md)
 
-## DSH 0.2.0-rc.2 compatibility
+## DSH 0.2.1-rc.2 compatibility
 
-The provider uses pi-ai `0.87.1`, matching the DSH adapter. The Conversation UI leaves live status and scrolling to DSH 0.2 and uses its localized duration units for completed Turns, including stopped and failed outcomes. The provider, Conversation UI, and Suite were booted together with the Models and Logistics plugins in an isolated DSH `0.2.0-rc.2` Web profile; all three plugin settings pages rendered without browser console errors. Restart DSH after replacing an older plugin version.
+The provider uses pi-ai `1.3.0`, matching the DSH adapter. The Conversation UI leaves live status and scrolling to DSH 0.2 and uses its localized duration units for completed Turns, including stopped and failed outcomes. The provider, Conversation UI, and Suite were booted together with the Models and Logistics plugins in an isolated DSH `0.2.1-rc.2` Web profile; all three plugin settings pages rendered without browser console errors. Restart DSH after replacing an older plugin version.
 
 ## DSH 0.1.7-rc.2 startup
 

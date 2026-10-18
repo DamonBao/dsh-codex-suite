@@ -7,7 +7,7 @@
 
 [English](README.md) | 简体中文
 
-为 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)（DSH）打造的插件套件：把 **ChatGPT / OpenAI Codex 模型**和 **Codex 风格的对话体验**带进 DSH Web UI。基于 DSH `0.2.0-rc.2` 构建（peer 范围 `>=0.2.0-rc.2 <0.3.0-0`）。
+为 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)（DSH）打造的插件套件：把 **ChatGPT / OpenAI Codex 模型**和 **Codex 风格的对话体验**带进 DSH Web UI。基于 DSH `0.2.1-rc.2` 构建（peer 范围 `>=0.2.0-rc.2 <0.3.0-0`）。
 
 本仓库是 pnpm monorepo，包含两个相互独立的运行时插件和一个纯组合包：
 
@@ -138,9 +138,9 @@ dsh web
 
 各包详细文档：[codex-provider](packages/codex-provider/README.zh.md) · [conversation-ui](packages/conversation-ui/README.md) · [suite](packages/all/README.md)
 
-## DSH 0.2.0-rc.2 兼容
+## DSH 0.2.1-rc.2 兼容
 
-Provider 使用与 DSH 适配器一致的 pi-ai `0.87.1`。Conversation UI 将运行状态和滚动交给 DSH 0.2，已结束的 Turn 使用其本地化时长单位，并正确显示停止和失败状态。Provider、Conversation UI、Suite 已与 Models、Logistics 插件一起在隔离的 DSH `0.2.0-rc.2` Web profile 中启动，三个插件设置页均可呈现，浏览器控制台无错误。替换旧版插件后重启 DSH。
+Provider 使用与 DSH 适配器一致的 pi-ai `1.3.0`。Conversation UI 将运行状态和滚动交给 DSH 0.2，已结束的 Turn 使用其本地化时长单位，并正确显示停止和失败状态。Provider、Conversation UI、Suite 已与 Models、Logistics 插件一起在隔离的 DSH `0.2.1-rc.2` Web profile 中启动，三个插件设置页均可呈现，浏览器控制台无错误。替换旧版插件后重启 DSH。
 
 ## DSH 0.1.7-rc.2 启动兼容
 
