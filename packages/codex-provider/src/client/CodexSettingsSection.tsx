@@ -18,7 +18,7 @@ import type {
 } from '../types.ts'
 import type { CodexAuthCardFace, CodexAuthCardState } from './controller.ts'
 import type { CodexSettingsKey } from './locales.ts'
-import { formatCodexPlanName, formatResetTime, formatUsageNumber } from './locale-format.ts'
+import { formatCodexPlanName, formatResetTime, formatRestoredWindows, formatUsageNumber } from './locale-format.ts'
 import { OpenAILogo } from './OpenAILogo.tsx'
 import css from './CodexSettingsSection.module.css'
 
@@ -280,9 +280,7 @@ function ResetResultBody({
         <div className={css.resetResult} role="status">
           <p className={css.resetResultText}>{t('resetResultReset')}</p>
           {windowsReset === null ? null : (
-            <p className={css.resetResultMeta}>
-              {formatUsageNumber(windowsReset, locale)} {t('resetResultWindowsReset')}
-            </p>
+            <p className={css.resetResultMeta}>{formatRestoredWindows(windowsReset, locale)}</p>
           )}
         </div>
       )
