@@ -256,14 +256,14 @@ describe('Codex-style deliverables', () => {
       turn: {
         data: {
           get: (key: string) => key === 'deliverables'
-            ? { produced: [{ seq: 2, path: 'test-file-1.txt' }, { seq: 3, path: 'test-file-2.txt' }] }
+            ? { produced: [{ path: 'test-file-1.txt' }, { path: 'test-file-2.txt' }] }
             : undefined,
         },
       },
     }
     expect(selectDeliverables(owner as never)).toEqual([
-      { seq: 2, path: 'test-file-1.txt', added: 0, removed: 0, kind: 'file' },
-      { seq: 3, path: 'test-file-2.txt', added: 0, removed: 0, kind: 'file' },
+      { seq: 5, path: 'test-file-1.txt', added: 0, removed: 0, kind: 'file' },
+      { seq: 5, path: 'test-file-2.txt', added: 0, removed: 0, kind: 'file' },
     ])
   })
 
@@ -275,14 +275,14 @@ describe('Codex-style deliverables', () => {
           get: (key: string) => key === DELIVERABLES_DATA_KEY
             ? { entries: [{ path: 'src/App.tsx', seq: 2, added: 1, removed: 0, kind: 'file' }] }
             : key === 'deliverables'
-              ? { produced: [{ seq: 2, path: '/repo/src/App.tsx' }, { seq: 3, path: 'src/Other.tsx' }] }
+              ? { produced: [{ path: '/repo/src/App.tsx' }, { path: 'src/Other.tsx' }] }
               : undefined,
         },
       },
     }
     expect(selectDeliverables(owner as never)).toEqual([
-      { path: 'src/App.tsx', seq: 2, added: 1, removed: 0, kind: 'file' },
-      { path: 'src/Other.tsx', seq: 3, added: 0, removed: 0, kind: 'file' },
+      { path: 'src/App.tsx', seq: 5, added: 1, removed: 0, kind: 'file' },
+      { path: 'src/Other.tsx', seq: 5, added: 0, removed: 0, kind: 'file' },
     ])
   })
 
@@ -294,13 +294,13 @@ describe('Codex-style deliverables', () => {
           get: (key: string) => key === DELIVERABLES_DATA_KEY
             ? { entries: [] }
             : key === 'deliverables'
-              ? { produced: [{ seq: 2, path: 'native.txt' }] }
+              ? { produced: [{ path: 'native.txt' }] }
               : undefined,
         },
       },
     }
     expect(selectDeliverables(owner as never)).toEqual([
-      { path: 'native.txt', seq: 2, added: 0, removed: 0, kind: 'file' },
+      { path: 'native.txt', seq: 5, added: 0, removed: 0, kind: 'file' },
     ])
   })
 

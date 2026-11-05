@@ -17,7 +17,7 @@ import { DeliverablesTail } from './DeliverablesCard.tsx'
 import { deliverablesDefinition } from './deliverables.ts'
 import { developerTools } from './developer-tools.ts'
 import { createConversationSettingsApi } from './conversation-ui-settings-api.ts'
-import { NS as SETTINGS_NS, en, zh } from './locales.ts'
+import { NS as SETTINGS_NS, de, en, es, fr, ja, pt, ru, zh } from './locales.ts'
 import { DEFAULT_CONVERSATION_CONFIG, CONVERSATION_BOOT_GLOBAL, type ConversationConfig } from '../config.ts'
 import { DEFAULT_CONVERSATION_SETTINGS, type ConversationSettings } from '../settings.ts'
 
@@ -156,7 +156,7 @@ export function apply(ctx: ClientContext): void {
     return events.register(deliverablesDefinition)
   })
 
-  ctx.inject(['locale'], (localeCtx) => localeCtx.effect(() => localeCtx.locale.register(SETTINGS_NS, { zh, en }), 'dsh-conversation-ui: dictionaries'))
+  ctx.inject(['locale'], (localeCtx) => localeCtx.effect(() => localeCtx.locale.register(SETTINGS_NS, { zh, en, ja, es, fr, de, ru, pt }), 'dsh-conversation-ui: dictionaries'))
 
   // The card talks to the plugin-owned loopback RPC, so the core settings
   // namespace allowlist cannot make it disappear. The stream still applies

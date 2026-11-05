@@ -1,6 +1,6 @@
 # @jcy2387/dsh-conversation-ui
 
-This release targets Harness `0.2.1-rc.2`. The deliverables card uses an independent list entry; files defer to the native changed-files card when it is active, while the plugin adds websites without drawing a second file card. Settings appear on the Suite or standalone bundle page. Assistant rows delegate to the native renderer; DSH owns work-details modes, tool groups, folding, and scrolling. Older Harness users should keep the corresponding older plugin version.
+This release targets Harness `0.2.2-rc.1`. The deliverables card uses an independent list entry; files defer to the native changed-files card when it is active, while the plugin adds websites without drawing a second file card. Settings appear on the Suite or standalone bundle page. Assistant rows delegate to the native renderer; DSH owns work-details modes, tool groups, folding, and scrolling. Older Harness users should keep the corresponding older plugin version.
 
 [![CI](https://github.com/DamonBao/dsh-codex-suite/actions/workflows/ci.yml/badge.svg)](https://github.com/DamonBao/dsh-codex-suite/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
@@ -44,14 +44,14 @@ A conversation enhancement plugin for DeepSeek Harness (DSH): progressive reveal
 
 - Durable reveal mode (typewriter / teleprompter), smoothing preset (realtime / balanced / silky), reveal speed, and **Auto-expand thinking** controls in *Plugins → DSH Codex Suite (or Conversation UI)*; changes apply live without a restart.
 - The card also shows the current version and installation kind (npm / local development); npm installs get a one-click update action (restart required after updating).
-- Localized in Chinese and English.
+- Localized in the eight DSH built-in languages (zh/en/ja/es/fr/de/ru/pt).
 
 ## Install
 
 Published package:
 
 ```sh
-dsh plugin --profile web add @jcy2387/dsh-conversation-ui@0.2.1-rc.2
+dsh plugin --profile web add @jcy2387/dsh-conversation-ui@0.2.2-rc.1
 dsh web
 ```
 
@@ -125,4 +125,4 @@ Tests run on vitest + Testing Library, loading the published DSH Chat factory an
 
 [MIT](LICENSE) © jcy2387
 
-This release targets DSH `0.2.1-rc.2`. It imports `conversation-ui.thinkAutoExpand` from `settings.yaml` or `settings.yaml.imported` into the active profile’s `cordis.patch.yml`, recording a marker after success and retaining the source after failure. The plugin’s compatibility import fills only missing values. Exported `locale/en.json` and `locale/zh.json` localize the name and description in DSH.
+This release targets DSH `0.2.2-rc.1`. It imports `conversation-ui.thinkAutoExpand` from `settings.yaml` or `settings.yaml.imported` into the active profile’s `cordis.patch.yml`, recording a marker after success and retaining the source after failure. The plugin’s compatibility import fills only missing values. Exported `locale/<language>.json` files localize the name and description in DSH.

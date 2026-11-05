@@ -2,12 +2,12 @@
 
 [![CI](https://github.com/DamonBao/dsh-codex-suite/actions/workflows/ci.yml/badge.svg)](https://github.com/DamonBao/dsh-codex-suite/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Node](https://img.shields.io/badge/node-%5E22.19%20%7C%7C%20%3E%3D24-green.svg)](#开发)
+[![Node](https://img.shields.io/badge/node-%3E%3D24.9-green.svg)](#开发)
 [![pnpm](https://img.shields.io/badge/pnpm-11-orange.svg)](#开发)
 
 [English](README.md) | 简体中文
 
-为 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)（DSH）打造的插件套件：把 **ChatGPT / OpenAI Codex 模型**和 **Codex 风格的对话体验**带进 DSH Web UI。基于 DSH `0.2.1-rc.2` 构建（peer 范围 `>=0.2.0-rc.2 <0.3.0-0`）。
+为 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)（DSH）打造的插件套件：把 **ChatGPT / OpenAI Codex 模型**和 **Codex 风格的对话体验**带进 DSH Web UI。基于 DSH `0.2.2-rc.1` 构建（peer 范围 `>=0.2.2-rc.1 <0.3.0-0`）。
 
 本仓库是 pnpm monorepo，包含两个相互独立的运行时插件和一个纯组合包：
 
@@ -32,7 +32,7 @@
 - **重置次数（额度银行）。** 查看账号可用的 banked reset 次数与最早到期时间，并在确认弹窗中一键兑换，恢复 5 小时与每周限额窗口。
 - **代理感知网络。** 自动探测环境变量与系统代理（macOS / Windows / Linux），仅让 OpenAI 流量走代理、回环保持直连，并提供显式代理模式（auto / environment / off）。
 - **可靠性优先的默认值。** 默认 SSE 传输（避免 WebSocket 后期失败导致部分输出重复）、5 分钟流空闲超时、可配置重试策略。
-- **原生设置页** 位于 *插件 → DSH Codex Suite → codex-provider*，中英文界面、实时状态，RPC 仅限 loopback 权限——凭据绝不离开 Host。
+- **原生设置页** 位于 *插件 → DSH Codex Suite → codex-provider*，支持 DSH 内置八种语言（中/英/日/西/法/德/俄/葡）界面、实时状态，RPC 仅限 loopback 权限——凭据绝不离开 Host。
 
 **Conversation UI —— 在 DSH 原生对话中增强**
 
@@ -44,26 +44,26 @@
 
 ---
 
-插件显示元数据通过包导出的 `locale/en.json` 与 `locale/zh.json` 提供，使用 `meta.title`、`meta.description`；插件列表、详情及组件名称跟随 DSH 界面语言。`package.json` 的普通描述保留英文供 npm 使用。
+插件显示元数据通过包导出的 `locale/<语言>.json`（覆盖 DSH 内置八种语言）提供，使用 `meta.title`、`meta.description`；插件列表、详情及组件名称跟随 DSH 界面语言。`package.json` 的普通描述保留英文供 npm 使用。
 
 自定义图标由 `package.json` 的 `icon: "./icon.svg"` 声明，随 npm 包一起发布。套件和两个子组件统一使用青绿代码图标。
 
 ## 安装
 
-前置条件：DeepSeek Harness（`dsh`）`>=0.2.0-rc.2 <0.3.0-0`（装有 `web` profile）、Node.js `^22.19 || >=24`、pnpm 11。
+前置条件：DeepSeek Harness（`dsh`）`>=0.2.2-rc.1 <0.3.0-0`（装有 `web` profile）、Node.js `>=24.9`、pnpm 11。
 
 **安装整套 Suite（推荐）：**
 
 ```sh
-dsh plugin --profile web add @jcy2387/dsh-suite@0.2.1-rc.2
+dsh plugin --profile web add @jcy2387/dsh-suite@0.2.2-rc.1
 dsh web
 ```
 
 **或单独安装插件：**
 
 ```sh
-dsh plugin --profile web add @jcy2387/dsh-codex-provider@0.2.1-rc.2
-dsh plugin --profile web add @jcy2387/dsh-conversation-ui@0.2.1-rc.2
+dsh plugin --profile web add @jcy2387/dsh-codex-provider@0.2.2-rc.1
+dsh plugin --profile web add @jcy2387/dsh-conversation-ui@0.2.2-rc.1
 dsh web
 ```
 
@@ -138,9 +138,9 @@ dsh web
 
 各包详细文档：[codex-provider](packages/codex-provider/README.zh.md) · [conversation-ui](packages/conversation-ui/README.md) · [suite](packages/all/README.md)
 
-## DSH 0.2.1-rc.2 兼容
+## DSH 0.2.2-rc.1 兼容
 
-Provider 使用与 DSH 适配器一致的 pi-ai `1.3.0`。Conversation UI 将运行状态和滚动交给 DSH 0.2，已结束的 Turn 使用其本地化时长单位，并正确显示停止和失败状态。Provider、Conversation UI、Suite 已与 Models、Logistics 插件一起在隔离的 DSH `0.2.1-rc.2` Web profile 中启动，三个插件设置页均可呈现，浏览器控制台无错误。替换旧版插件后重启 DSH。
+Provider 使用与 DSH 适配器一致的 pi-ai `1.3.0`，整套插件基于 DSH `0.2.2-rc.1` 的依赖闭包构建（cordis `4.1.0`、loader `1.1.0`、schemastery `3.19.0`）。Conversation UI 将运行状态和滚动交给 DSH 0.2，已结束的 Turn 使用其本地化时长单位，并正确显示停止和失败状态。两个插件均通过类型检查与单元测试，并能在隔离的 DSH `0.2.2-rc.1` Web profile 中启动：启动图正常下发两个客户端 bundle，Conversation UI 的启动配置全局变量已注入页面，两个插件的 RPC 通道均可通过 Connection 信任围栏应答。浏览器端的实际渲染仍需在完整 profile 中人工确认。替换旧版插件后重启 DSH。
 
 ## DSH 0.1.7-rc.2 启动兼容
 
@@ -154,7 +154,7 @@ Codex 账号继续读取原凭据存储的 `OPENAI_CODEX_OAUTH`，不重新登�
 
 ## 开发
 
-要求：Node.js `^22.19.0 || >=24.0.0`，pnpm `11.7`。
+要求：Node.js `>=24.9.0`，pnpm `11.7`。
 
 ```sh
 pnpm install

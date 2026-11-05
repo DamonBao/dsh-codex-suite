@@ -49,30 +49,39 @@ const PLAN_NAMES_EN: Readonly<Record<string, string>> = {
   unknown: 'Unknown',
 }
 
-/** User-facing Chinese names for OpenAI's internal plan_type identifiers. */
-const PLAN_NAMES_ZH: Readonly<Record<string, string>> = {
-  free: '免费版',
-  go: 'Go',
-  plus: 'Plus',
-  prolite: 'Pro 5x',
-  promax: 'Pro 20x',
-  pro: 'Pro 20x',
-  team: 'Team',
-  self_serve_business_usage_based: 'Business',
-  business: 'Business',
-  enterprise_cbp_usage_based: 'Enterprise',
-  enterprise: 'Enterprise',
-  edu: '教育版',
-  unknown: '未知',
+/**
+ * Localized names for the generic plan tiers. OpenAI brand tiers (Plus, Pro 5x,
+ * Pro 20x, Team, Business, Enterprise) keep their English product names in
+ * every language, matching how OpenAI presents them.
+ */
+const PLAN_GENERIC_NAMES: Readonly<Record<string, Readonly<Record<'free' | 'edu' | 'unknown', string>>>> = {
+  zh: { free: '免费版', edu: '教育版', unknown: '未知' },
+  ja: { free: '無料', edu: '教育版', unknown: '不明' },
+  es: { free: 'Gratis', edu: 'Educación', unknown: 'Desconocido' },
+  fr: { free: 'Gratuit', edu: 'Éducation', unknown: 'Inconnu' },
+  de: { free: 'Kostenlos', edu: 'Bildung', unknown: 'Unbekannt' },
+  ru: { free: 'Бесплатный', edu: 'Образование', unknown: 'Неизвестно' },
+  pt: { free: 'Grátis', edu: 'Educação', unknown: 'Desconhecido' },
+}
+
+/** Generic tiers whose display name is localized per language. */
+const GENERIC_PLAN_TIERS: Readonly<Record<string, 'free' | 'edu' | 'unknown'>> = {
+  free: 'free',
+  edu: 'edu',
+  unknown: 'unknown',
 }
 
 /**
  * Map one raw OpenAI `plan_type` to its user-facing plan name (Plus, Pro 5x,
- * Pro 20x, Business…). Unrecognized identifiers pass through unchanged so new
+ * Pro 20x, Business…). Generic tiers follow the active DSH language; brand
+ * tiers stay in English. Unrecognized identifiers pass through unchanged so new
  * backend tiers stay visible instead of being masked.
  */
 export function formatCodexPlanName(planType: string, locale: string): string {
   const trimmed = planType.trim()
-  const names = locale.toLowerCase().startsWith('zh') ? PLAN_NAMES_ZH : PLAN_NAMES_EN
-  return names[trimmed.toLowerCase()] ?? trimmed
+  const id = trimmed.toLowerCase()
+  const tier = GENERIC_PLAN_TIERS[id]
+  const language = locale.toLowerCase().split('-')[0] ?? ''
+  const localized = tier === undefined ? undefined : PLAN_GENERIC_NAMES[language]?.[tier]
+  return localized ?? PLAN_NAMES_EN[id] ?? trimmed
 }

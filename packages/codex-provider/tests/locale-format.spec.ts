@@ -49,6 +49,23 @@ describe('Codex usage locale formatting', () => {
     expect(formatCodexPlanName('  PLUS  ', 'en')).toBe('Plus')
   })
 
+  it('localizes generic plan tiers for every DSH 0.2.2 built-in language', () => {
+    expect(formatCodexPlanName('free', 'ja')).toBe('無料')
+    expect(formatCodexPlanName('free', 'es')).toBe('Gratis')
+    expect(formatCodexPlanName('free', 'fr')).toBe('Gratuit')
+    expect(formatCodexPlanName('free', 'de')).toBe('Kostenlos')
+    expect(formatCodexPlanName('free', 'ru')).toBe('Бесплатный')
+    expect(formatCodexPlanName('free', 'pt-BR')).toBe('Grátis')
+    expect(formatCodexPlanName('edu', 'de')).toBe('Bildung')
+    expect(formatCodexPlanName('unknown', 'ru')).toBe('Неизвестно')
+    // Brand tiers keep OpenAI's English product names in every language.
+    expect(formatCodexPlanName('prolite', 'ja')).toBe('Pro 5x')
+    expect(formatCodexPlanName('team', 'fr')).toBe('Team')
+    expect(formatCodexPlanName('enterprise', 'pt')).toBe('Enterprise')
+    // A language without a generic map still falls back to English.
+    expect(formatCodexPlanName('free', 'ko')).toBe('Free')
+  })
+
   it('passes unrecognized plan identifiers through instead of masking them', () => {
     expect(formatCodexPlanName('future_tier', 'en')).toBe('future_tier')
     expect(formatCodexPlanName('Future Tier', 'zh')).toBe('Future Tier')

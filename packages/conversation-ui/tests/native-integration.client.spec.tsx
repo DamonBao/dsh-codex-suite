@@ -17,7 +17,7 @@ import type { ConversationSettings } from '../src/settings.ts'
 type AssistantProps = ChatNodeViewProps<'assistant-step'> & {
   renderSlot?: (name: string, owner: Record<string, unknown>) => unknown
 }
-const NATIVE_INJECT = ['slots', 'locale', 'uiConversation', 'uiSession', 'configForms']
+const NATIVE_INJECT = ['slots', 'locale', 'uiConversation', 'uiSession', 'configForms', 'connection']
 const contexts: Context[] = []
 afterEach(async () => {
   cleanup()
@@ -44,6 +44,28 @@ async function bench(pluginFirst = false) {
     views: { register: definition }, groups: { register: definition },
   } as never)
   ctx.provide('uiSession', { provide: () => () => {} } as never)
+  // DSH 0.2.2 Chat reads the live connection lifecycle and the plugin's own
+  // settings card reaches its Host RPC through the same Connection handle.
+  const connectionState = createSnapshotStore<unknown>(undefined)
+  ctx.provide('connection', {
+    state: connectionState,
+    isLoopback: true,
+    rpc: {
+      call: async () => ({
+        ok: true,
+        value: {
+          version: '0.2.2-rc.1',
+          installation: 'development',
+          writable: true,
+          thinkAutoExpand: true,
+          mode: 'typewriter',
+          preset: 'balanced',
+          revealCharsPerSec: 80,
+          canUpgrade: false,
+        },
+      }),
+    },
+  } as never)
   ctx.slots.register({
     name: 'root', children: {
       'conversation.view': { kind: 'list', scope: 'session' },
@@ -106,6 +128,8 @@ function props(ctx: Context, text: string, options: {
         : createElement('span', { 'data-test-reasoning-body': '' }, String(owner.text ?? ''))
     ),
     fileMentions: () => undefined,
+    resolveFilePath: (path: string) => path,
+    useContextMenu: () => ({ getTriggerProps: () => ({}) }),
     openFile: vi.fn(),
     openSkill: vi.fn(), inspectCall: undefined, forkAt: vi.fn(),
     loadImage: Object.assign(async () => '', { peek: () => undefined }),
@@ -143,8 +167,14 @@ describe('native Chat integration', () => {
     expect(isEnhanced(enhancedComponent)).toBe(true)
     expect(assistant.children).toBeDefined()
     expect(assistant.inject).toBeDefined()
-    const nativeFace = assistant.inject!('session-1' as never)
-    expect(nativeFace).toEqual(assistant.inject!('session-1' as never))
+    const nativeFace = assistant.inject!('session-1' as never) as Record<string, unknown>
+    const nativeFaceAgain = assistant.inject!('session-1' as never) as Record<string, unknown>
+    // DSH 0.2.2 builds per-session resolvers on each call, so the seat wiring is
+    // compared by shape and by the shared hook source rather than by function
+    // identity across two independent inject calls.
+    expect(Object.keys(nativeFaceAgain).sort()).toEqual(Object.keys(nativeFace).sort())
+    expect((nativeFaceAgain.hooks as { presentation: unknown }).presentation)
+      .toBe((nativeFace.hooks as { presentation: unknown }).presentation)
     await plugin.dispose()
     expect(ctx.slots.entries('conversation.view')[0]?.component).toBe(NativeView)
     expect(entry(ctx)).toBe(assistant)
