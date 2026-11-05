@@ -311,7 +311,7 @@ describe('Codex-style deliverables', () => {
       seq: 3,
       openFile,
     } as unknown as TurnTailOwnerProps
-    const view = render(<DeliverablesTail t={t} {...owner} />)
+    const view = render(<DeliverablesTail t={t} getLocale={() => 'zh'} {...owner} />)
     expect(view.container.childElementCount).toBe(0)
 
     const entries = [
@@ -322,11 +322,11 @@ describe('Codex-style deliverables', () => {
       ...owner,
       turn: { turn: 1, data: { get: (key: string) => key === DELIVERABLES_DATA_KEY ? { entries } : undefined } },
     } as unknown as TurnTailOwnerProps
-    view.rerender(<DeliverablesTail t={t} {...withFiles} />)
+    view.rerender(<DeliverablesTail t={t} getLocale={() => 'zh'} {...withFiles} />)
     expect(view.queryByTitle('later.txt')).toBeNull()
     fireEvent.click(view.getByTitle('visible.txt'))
     expect(openFile).toHaveBeenCalledWith('visible.txt')
-    view.rerender(<DeliverablesTail t={t} {...owner} />)
+    view.rerender(<DeliverablesTail t={t} getLocale={() => 'zh'} {...owner} />)
     expect(view.container.childElementCount).toBe(0)
   })
 
@@ -336,6 +336,7 @@ describe('Codex-style deliverables', () => {
     const view = render(
       <DeliverablesCard
         t={t}
+        getLocale={() => 'zh'}
         matched={[
           { path: '/workspace/src/App.tsx', seq: 1, added: 2, removed: 1, kind: 'file' },
           { path: '/workspace/src/App.css', seq: 1, added: 4, removed: 0, kind: 'file' },
@@ -387,7 +388,7 @@ describe('Codex-style deliverables', () => {
           },
         },
       } as unknown as TurnTailOwnerProps
-      const view = render(<DeliverablesTail t={t} {...owner} />)
+      const view = render(<DeliverablesTail t={t} getLocale={() => 'zh'} {...owner} />)
       expect(view.queryByTitle('src/App.tsx')).toBeNull()
       expect(view.getByTitle('https://preview.example.test')).toBeTruthy()
 

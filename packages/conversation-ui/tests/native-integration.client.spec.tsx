@@ -184,6 +184,16 @@ describe('native Chat integration', () => {
     expect(ctx.slots.entries('conversation.chat.turnTail')).toHaveLength(0)
   })
 
+  it('injects the live DSH locale into the deliverables card', async () => {
+    const { ctx } = await bench()
+    const tail = ctx.slots.entries('conversation.chat.turnTail')[0]
+    expect(tail).toBeDefined()
+    const face = tail!.inject!('session-1' as never) as { getLocale: () => string }
+    expect(typeof face.getLocale).toBe('function')
+    const active = (ctx.get('locale') as unknown as { getLocale(): { active: string } }).getLocale().active
+    expect(face.getLocale()).toBe(active)
+  })
+
   it('retains native work-details previews and independent disclosure resets', async () => {
     const { ctx, settings } = await bench()
     const reset = createSnapshotStore(0)

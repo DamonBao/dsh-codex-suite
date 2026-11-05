@@ -13,7 +13,7 @@ import type {} from '@deepseek-ai/dsh-client-ui-settings/client'
 import { registerAssistantEnhancement } from './NativeAssistantEnhancement.tsx'
 import { ConversationCard } from './ConversationCard.tsx'
 import { ConversationCardController } from './conversation-ui-card-controller.ts'
-import { DeliverablesTail } from './DeliverablesCard.tsx'
+import { DeliverablesTail, type DeliverablesInjected } from './DeliverablesCard.tsx'
 import { deliverablesDefinition } from './deliverables.ts'
 import { developerTools } from './developer-tools.ts'
 import { createConversationSettingsApi } from './conversation-ui-settings-api.ts'
@@ -150,6 +150,13 @@ export function apply(ctx: ClientContext): void {
     priority: -100,
     registrant: 'dsh-conversation-ui',
     locale: SETTINGS_NS,
+    // Count-bearing copy selects CLDR plural forms, so the card reads the live
+    // locale id at render time; a composition without the locale service keeps
+    // the English fallback.
+    inject: (): DeliverablesInjected => ({
+      getLocale: () => (ctx.get('locale') as unknown as
+        { getLocale(): { active: string } } | undefined)?.getLocale().active ?? 'en',
+    }),
   }, DeliverablesTail))
   ctx.inject(['uiConversation'], (deliverablesCtx) => {
     const events = deliverablesCtx.uiConversation.events

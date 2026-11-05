@@ -1,5 +1,5 @@
 import { useState, useSyncExternalStore } from 'react'
-import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
+import type { InjectFace, PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
 import type { TurnTailOwnerProps } from '@deepseek-ai/dsh-client-ui-chat/client'
 import {
   IconChevronDownOutlineMedium,
@@ -8,10 +8,18 @@ import {
   IconProjectAddOutlineMedium,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import { nativeDeliverablesPresent, selectDeliverables, type DeliverableEntry } from './deliverables.ts'
+import { formatDeliverablesSummary, formatMoreDeliverables, type DeliverableKind } from './deliverables-format.ts'
 import { developerTools } from './developer-tools.ts'
 import css from './DeliverablesCard.module.css'
 
+/** Business face injected by the turn-tail registration. */
+export interface DeliverablesInjected {
+  /** Active DSH locale id, read at render time so plural forms follow language changes. */
+  getLocale: () => string
+}
+
 type DeliverablesTailProps = TurnTailOwnerProps & PropsLocale<'settings.conversationUi'>
+  & InjectFace<DeliverablesInjected>
 
 export interface DeliverablesCardProps extends DeliverablesTailProps {
   readonly matched: readonly DeliverableEntry[]
@@ -63,18 +71,10 @@ function displayPath(path: string, prefixes: readonly string[]): string {
   return path
 }
 
-function hiddenKindLabel(entries: readonly DeliverableEntry[], t: DeliverablesTailProps['t']): string {
-  if (entries.every(isWebsite)) return t('deliveriesWebsites')
-  if (entries.every(entry => !isWebsite(entry))) return t('deliveriesFiles')
-  return t('deliveriesItems')
-}
-
-function countLabel(entries: readonly DeliverableEntry[], t: DeliverablesTailProps['t']): string {
-  const files = entries.filter(entry => !isWebsite(entry)).length
-  const websites = entries.length - files
-  if (files > 0 && websites === 0) return t('deliveriesEdited').replace('{count}', String(files))
-  if (files === 0) return t('deliveriesWebsitesCount').replace('{count}', String(websites))
-  return t('deliveriesCount').replace('{count}', String(entries.length))
+function hiddenKind(entries: readonly DeliverableEntry[]): DeliverableKind {
+  if (entries.every(isWebsite)) return 'website'
+  if (entries.every(entry => !isWebsite(entry))) return 'file'
+  return 'item'
 }
 
 /** Render this list contribution only when its Turn has delivered files or websites. */
@@ -94,11 +94,13 @@ export function DeliverablesTail(props: DeliverablesTailProps) {
 }
 
 /** Codex-style turn-tail card for edited files and deployed websites. */
-export function DeliverablesCard({ matched: entries, openFile, t }: DeliverablesCardProps) {
+export function DeliverablesCard({ matched: entries, openFile, t, getLocale }: DeliverablesCardProps) {
   const [expanded, setExpanded] = useState(false)
   const visible = expanded ? entries : entries.slice(0, 3)
   const hidden = entries.length - visible.length
-  const summary = countLabel(entries, t)
+  const locale = getLocale()
+  const files = entries.filter(entry => !isWebsite(entry)).length
+  const summary = formatDeliverablesSummary(files, entries.length - files, locale)
   const hasFiles = entries.some(entry => !isWebsite(entry))
   const firstWebsite = entries.find(isWebsite)
   const prefixes = relativePrefixes(entries)
@@ -151,7 +153,7 @@ export function DeliverablesCard({ matched: entries, openFile, t }: Deliverables
       </div>
       {hidden > 0 && (
         <button type="button" className={css.more} onClick={() => { setExpanded(true) }}>
-          {t('deliveriesMore').replace('{count}', String(hidden)).replace('{kind}', hiddenKindLabel(entries.slice(visible.length), t))}
+          {formatMoreDeliverables(hidden, hiddenKind(entries.slice(visible.length)), locale)}
           <span className={css.moreIcon} aria-hidden><IconChevronDownOutlineMedium /></span>
         </button>
       )}
