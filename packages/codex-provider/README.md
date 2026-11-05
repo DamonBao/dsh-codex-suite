@@ -127,7 +127,7 @@ pnpm --filter @jcy2387/dsh-codex-provider test
 pnpm --filter @jcy2387/dsh-codex-provider build
 ```
 
-Eleven vitest suites cover the auth state machine and failure classification, the IPv6 callback bridge, terminal-vs-transient refresh detection, proxy discovery (macOS / Windows / Linux / env), usage parsing and redaction, banked-reset listing/redeeming/idempotency, the settings card controller, and the RPC contract.
+Thirteen vitest suites cover the auth state machine and failure classification, the IPv6 callback bridge, terminal-vs-transient refresh detection, proxy discovery (macOS / Windows / Linux / env), usage parsing and redaction, banked-reset listing/redeeming/idempotency, the settings card controller, and the RPC contract.
 
 See the [monorepo README](../../README.md) for workspace-wide commands.
 

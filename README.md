@@ -140,7 +140,7 @@ Package-level docs: [codex-provider](packages/codex-provider/README.md) · [conv
 
 ## DSH 0.2.2-rc.1 compatibility
 
-The provider uses pi-ai `1.3.0`, matching the DSH adapter, and the suite builds against the DSH `0.2.2-rc.1` closure (cordis `4.1.0`, loader `1.1.0`, schemastery `3.19.0`). The Conversation UI leaves live status and scrolling to DSH 0.2 and uses its localized duration units for completed Turns, including stopped and failed outcomes. Both plugins typecheck, pass their unit suites, and boot in an isolated DSH `0.2.2-rc.1` Web profile: the boot graph serves both client bundles, the Conversation UI boot-config global is injected into the served HTML, and both plugin RPC channels answer through the Connection fence. Browser-level rendering still needs a manual pass on a full profile. Restart DSH after replacing an older plugin version.
+The provider uses pi-ai `1.3.0`, matching the DSH adapter, and the suite builds against the DSH `0.2.2-rc.1` closure (cordis `4.1.0`, loader `1.1.0`, schemastery `3.19.0`). The Conversation UI leaves live status and scrolling to DSH 0.2 and uses its localized duration units for completed Turns, including stopped and failed outcomes. Both plugins typecheck, pass their unit suites, and boot in an isolated DSH `0.2.2-rc.1` Web profile: the boot graph serves both client bundles, the Conversation UI boot-config global is injected into the served HTML, and both plugin RPC channels answer through the Connection fence. A Playwright pass over that Web profile then confirmed the browser side end to end: both plugin pages and both settings cards render, the eight DSH built-in languages switch live, and the console stays clean. Restart DSH after replacing an older plugin version.
 
 ## DSH 0.1.7-rc.2 startup
 
@@ -171,7 +171,7 @@ pnpm --filter @jcy2387/dsh-conversation-ui build
 pnpm --dir packages/all pack --dry-run
 ```
 
-Tests run on [vitest](https://vitest.dev) — 17 suites covering the OAuth state machine, token refresh, network/proxy detection, usage and banked-reset parsing, the settings controllers, and the streaming client views. Client tests resolve the installed published DSH packages (a small module-table stand-in instantiates the shipped browser factory bundles). CI verifies release tags match all three package versions and audits the published tarball contents, then runs a consumer smoke test that installs the packed tarballs into a scratch project (resolving the published peer ranges against the real registry) and imports every Node-side entry point.
+Tests run on [vitest](https://vitest.dev) — 19 suites covering the OAuth state machine, token refresh, network/proxy detection, usage and banked-reset parsing, the settings controllers, and the streaming client views. Client tests resolve the installed published DSH packages (a small module-table stand-in instantiates the shipped browser factory bundles). CI verifies release tags match all three package versions and audits the published tarball contents, then runs a consumer smoke test that installs the packed tarballs into a scratch project (resolving the published peer ranges against the real registry) and imports every Node-side entry point.
 
 ### Release
 
@@ -202,12 +202,12 @@ Then create and publish a GitHub Release for that tag. Dependabot checks GitHub 
 │  ├─ codex-provider/     # @jcy2387/dsh-codex-provider
 │  │  ├─ src/             # Host half: OAuth, refresh, network, usage, banked resets, LLM adapter
 │  │  ├─ src/client/      # Web half: Settings section UI
-│  │  ├─ tests/           # 12 vitest suites
+│  │  ├─ tests/           # 13 vitest suites
 │  │  └─ cordis.patch.yml
 │  ├─ conversation-ui/    # @jcy2387/dsh-conversation-ui
 │  │  ├─ src/             # Host half: config bridge, settings RPC
 │  │  ├─ src/client/      # Web half: stream views, cards, native-scroll bridge
-│  │  ├─ tests/           # 3 vitest suites
+│  │  ├─ tests/           # 6 vitest suites
 │  │  └─ cordis.patch.yml
 │  └─ all/                # @jcy2387/dsh-suite (pure bundle, no runtime code)
 ├─ .github/workflows/ci.yml       # validate + tarball audit + consumer smoke

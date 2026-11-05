@@ -127,7 +127,7 @@ pnpm --filter @jcy2387/dsh-codex-provider test
 pnpm --filter @jcy2387/dsh-codex-provider build
 ```
 
-十一个 vitest 套件覆盖：认证状态机与失败归类、IPv6 回调桥、终态与瞬时刷新失败的区分、代理探测（macOS / Windows / Linux / 环境变量）、用量解析与脱敏、重置次数的查询/兑换/幂等键、设置卡片控制器和 RPC 契约。
+十三个 vitest 套件覆盖：认证状态机与失败归类、IPv6 回调桥、终态与瞬时刷新失败的区分、代理探测（macOS / Windows / Linux / 环境变量）、用量解析与脱敏、重置次数的查询/兑换/幂等键、设置卡片控制器和 RPC 契约。
 
 工作区级命令见 [Monorepo README](../../README.zh.md)。
 

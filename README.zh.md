@@ -140,7 +140,7 @@ dsh web
 
 ## DSH 0.2.2-rc.1 兼容
 
-Provider 使用与 DSH 适配器一致的 pi-ai `1.3.0`，整套插件基于 DSH `0.2.2-rc.1` 的依赖闭包构建（cordis `4.1.0`、loader `1.1.0`、schemastery `3.19.0`）。Conversation UI 将运行状态和滚动交给 DSH 0.2，已结束的 Turn 使用其本地化时长单位，并正确显示停止和失败状态。两个插件均通过类型检查与单元测试，并能在隔离的 DSH `0.2.2-rc.1` Web profile 中启动：启动图正常下发两个客户端 bundle，Conversation UI 的启动配置全局变量已注入页面，两个插件的 RPC 通道均可通过 Connection 信任围栏应答。浏览器端的实际渲染仍需在完整 profile 中人工确认。替换旧版插件后重启 DSH。
+Provider 使用与 DSH 适配器一致的 pi-ai `1.3.0`，整套插件基于 DSH `0.2.2-rc.1` 的依赖闭包构建（cordis `4.1.0`、loader `1.1.0`、schemastery `3.19.0`）。Conversation UI 将运行状态和滚动交给 DSH 0.2，已结束的 Turn 使用其本地化时长单位，并正确显示停止和失败状态。两个插件均通过类型检查与单元测试，并能在隔离的 DSH `0.2.2-rc.1` Web profile 中启动：启动图正常下发两个客户端 bundle，Conversation UI 的启动配置全局变量已注入页面，两个插件的 RPC 通道均可通过 Connection 信任围栏应答。随后在同一 Web profile 上用 Playwright 完成了浏览器端确认：两个插件页面与两张设置卡片均正常渲染，DSH 内置的八种语言可实时切换，控制台无报错。替换旧版插件后重启 DSH。
 
 ## DSH 0.1.7-rc.2 启动兼容
 
@@ -171,7 +171,7 @@ pnpm --filter @jcy2387/dsh-conversation-ui build
 pnpm --dir packages/all pack --dry-run
 ```
 
-测试基于 [vitest](https://vitest.dev)，共 17 个套件，覆盖 OAuth 状态机、令牌刷新、网络/代理探测、用量与重置次数解析、设置控制器和流式客户端视图。客户端测试直接解析已安装的 DSH 发布包（用一个小型 module-table 替身实例化其浏览器 factory bundle）。CI 会校验发布 tag 与三个包版本一致、审计发布 tarball 的内容，并跑一个消费方冒烟测试：把打包出的 tarball 装进一个全新工程（用真实 registry 解析已发布的 peer 依赖区间），再导入全部 Node 侧入口。
+测试基于 [vitest](https://vitest.dev)，共 19 个套件，覆盖 OAuth 状态机、令牌刷新、网络/代理探测、用量与重置次数解析、设置控制器和流式客户端视图。客户端测试直接解析已安装的 DSH 发布包（用一个小型 module-table 替身实例化其浏览器 factory bundle）。CI 会校验发布 tag 与三个包版本一致、审计发布 tarball 的内容，并跑一个消费方冒烟测试：把打包出的 tarball 装进一个全新工程（用真实 registry 解析已发布的 peer 依赖区间），再导入全部 Node 侧入口。
 
 ### 发布
 
@@ -202,12 +202,12 @@ git push origin main --tags
 │  ├─ codex-provider/     # @jcy2387/dsh-codex-provider
 │  │  ├─ src/             # Host 半：OAuth、刷新、网络、用量、重置次数、LLM 适配器
 │  │  ├─ src/client/      # Web 半：设置分区 UI
-│  │  ├─ tests/           # 12 个 vitest 套件
+│  │  ├─ tests/           # 13 个 vitest 套件
 │  │  └─ cordis.patch.yml
 │  ├─ conversation-ui/    # @jcy2387/dsh-conversation-ui
 │  │  ├─ src/             # Host 半：配置桥、设置 RPC
 │  │  ├─ src/client/      # Web 半：流式视图、卡片、原生滚动桥接
-│  │  ├─ tests/           # 3 个 vitest 套件
+│  │  ├─ tests/           # 6 个 vitest 套件
 │  │  └─ cordis.patch.yml
 │  └─ all/                # @jcy2387/dsh-suite（纯组合包，无运行时代码）
 ├─ .github/workflows/ci.yml       # 校验 + tarball 审计 + 消费方冒烟
