@@ -114,7 +114,7 @@ Example overlay:
 The package ships two halves:
 
 - **Host half** (`src/`, exported from the package root) — a Cordis plugin injecting `llm`, `credentials`, and `settings`. It owns the OAuth lifecycle (`CodexAuthService`), token refresh (`CodexTokenRefresher`), network manager, usage service, and banked-reset service (`CodexResetService`), and registers the provider through `PiAiAdapter` (backed by `@earendil-works/pi-ai`'s `openaiCodexProvider`). The model catalog is validated at load (context window / max tokens must be usable for context budgeting and compaction).
-- **Web half** (`src/client/`, bundled to `lib/client.cjs` and discovered via the `dsh.client` manifest) — a React settings section registered into the Web UI's Settings page, localized in Chinese and English.
+- **Web half** (`src/client/`, bundled to `lib/client.cjs` and discovered via the `dsh.client` manifest) — a React settings section registered into the Web UI's Settings page, localized in the eight DSH built-in languages (zh/en/ja/es/fr/de/ru/pt).
 
 The halves talk over one **loopback-authority RPC channel** (`status`, `network`, `setProxyMode`, `usage`, `reset-credits`, `reset-credits/consume`, `login`, `cancel`, `logout`). Failure reasons crossing this boundary are enum values, not error text.
 
@@ -127,7 +127,7 @@ pnpm --filter @jcy2387/dsh-codex-provider test
 pnpm --filter @jcy2387/dsh-codex-provider build
 ```
 
-Eleven vitest suites cover the auth state machine and failure classification, the IPv6 callback bridge, terminal-vs-transient refresh detection, proxy discovery (macOS / Windows / Linux / env), usage parsing and redaction, banked-reset listing/redeeming/idempotency, the settings card controller, and the RPC contract.
+Thirteen vitest suites cover the auth state machine and failure classification, the IPv6 callback bridge, terminal-vs-transient refresh detection, proxy discovery (macOS / Windows / Linux / env), usage parsing and redaction, banked-reset listing/redeeming/idempotency, the settings card controller, and the RPC contract.
 
 See the [monorepo README](../../README.md) for workspace-wide commands.
 
@@ -135,4 +135,4 @@ See the [monorepo README](../../README.md) for workspace-wide commands.
 
 [MIT](LICENSE) © jcy2387
 
-This release targets DSH `0.2.1-rc.2` and uses the same pi-ai `1.3.0` types as the host adapter. It imports `openai-codex.proxyMode` from `settings.yaml` or `settings.yaml.imported` into the active profile’s `cordis.patch.yml`, recording a marker after success and retaining the source after failure. The plugin’s compatibility import fills only missing values. Exported `locale/en.json` and `locale/zh.json` localize the name and description in DSH.
+This release targets DSH `0.2.2-rc.1` and uses the same pi-ai `1.3.0` types as the host adapter. It imports `openai-codex.proxyMode` from `settings.yaml` or `settings.yaml.imported` into the active profile’s `cordis.patch.yml`, recording a marker after success and retaining the source after failure. The plugin’s compatibility import fills only missing values. Exported `locale/<language>.json` files localize the name and description in DSH.

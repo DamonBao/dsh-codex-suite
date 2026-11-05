@@ -1,6 +1,6 @@
 # @jcy2387/dsh-conversation-ui
 
-本版本面向 Harness `0.2.1-rc.2`。产物卡片使用列表插槽中的独立条目；文件在原生 changed-files 卡启用时交给原生卡，插件补充网站，避免重复；插件设置位于 Suite 或独立插件的配置页。助手行委托原生组件渲染，工作步骤展示模式、工具分组、折叠和滚动由 DSH 管理。旧版 Harness 用户应继续使用对应旧版插件。
+本版本面向 Harness `0.2.2-rc.1`。产物卡片使用列表插槽中的独立条目；文件在原生 changed-files 卡启用时交给原生卡，插件补充网站，避免重复；插件设置位于 Suite 或独立插件的配置页。助手行委托原生组件渲染，工作步骤展示模式、工具分组、折叠和滚动由 DSH 管理。旧版 Harness 用户应继续使用对应旧版插件。
 
 [![CI](https://github.com/DamonBao/dsh-codex-suite/actions/workflows/ci.yml/badge.svg)](https://github.com/DamonBao/dsh-codex-suite/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
@@ -44,14 +44,14 @@ DeepSeek Harness（DSH）的对话增强插件：在原生助手组件上增加�
 
 - 在 **插件 → DSH Codex Suite（或 Conversation UI）** 中提供持久的揭示模式（typewriter / teleprompter）、平滑预设（realtime / balanced / silky）、揭示速度和「自动展开思考」；修改实时生效，无需重启。
 - 卡片同时显示当前版本与安装形态（npm / 本地开发），npm 安装支持一键更新（更新后需重启）。
-- 界面中英文本地化。
+- 界面支持 DSH 内置八种语言本地化。
 
 ## 安装
 
 已发布版本：
 
 ```sh
-dsh plugin --profile web add @jcy2387/dsh-conversation-ui@0.2.1-rc.2
+dsh plugin --profile web add @jcy2387/dsh-conversation-ui@0.2.2-rc.1
 dsh web
 ```
 
@@ -125,4 +125,4 @@ pnpm --filter @jcy2387/dsh-conversation-ui build
 
 [MIT](LICENSE) © jcy2387
 
-本版面向 DSH `0.2.1-rc.2`。旧 `conversation-ui.thinkAutoExpand` 从 `settings.yaml` 或 `settings.yaml.imported` 导入当前 profile 的 `cordis.patch.yml`，成功后记录迁移标记；失败保留源文件供重试。插件兼容导入只补充缺失的值。名称和描述通过导出的 `locale/en.json`、`locale/zh.json` 跟随 DSH 界面语言。
+本版面向 DSH `0.2.2-rc.1`。旧 `conversation-ui.thinkAutoExpand` 从 `settings.yaml` 或 `settings.yaml.imported` 导入当前 profile 的 `cordis.patch.yml`，成功后记录迁移标记；失败保留源文件供重试。插件兼容导入只补充缺失的值。名称和描述通过导出的 `locale/<语言>.json` 跟随 DSH 界面语言。

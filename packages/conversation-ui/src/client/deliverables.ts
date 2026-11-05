@@ -301,16 +301,22 @@ function nativeDeliverables(owner: TurnTailOwnerProps): UnknownRecord | undefine
   return record((owner.turn.data as unknown as { get(key: string): unknown }).get('deliverables'))
 }
 
+/**
+ * Native produced paths, merged into the plugin's own entries. DSH 0.2.2 drops
+ * the per-path sequence: produced facts now accumulate against the Turn and
+ * include mutations after the closing reply, so every row anchors at the
+ * closing reply rather than being filtered by a path sequence.
+ * @param owner - closing-Turn identity.
+ * @returns native produced files anchored at the closing reply.
+ */
 function nativeProducedEntries(owner: TurnTailOwnerProps): readonly DeliverableEntry[] {
   const produced = nativeDeliverables(owner)?.produced
   if (!Array.isArray(produced)) return []
   const entries: DeliverableEntry[] = []
   for (const item of produced) {
-    const value = record(item)
-    const path = stringValue(value?.path)
-    const seq = typeof value?.seq === 'number' ? value.seq : Number.POSITIVE_INFINITY
-    if (path === undefined || seq > owner.seq || entries.some(entry => samePath(entry.path, path))) continue
-    entries.push({ path, seq, added: 0, removed: 0, kind: 'file' })
+    const path = stringValue(record(item)?.path)
+    if (path === undefined || entries.some(entry => samePath(entry.path, path))) continue
+    entries.push({ path, seq: owner.seq, added: 0, removed: 0, kind: 'file' })
   }
   return entries
 }

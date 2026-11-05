@@ -2,12 +2,12 @@
 
 [![CI](https://github.com/DamonBao/dsh-codex-suite/actions/workflows/ci.yml/badge.svg)](https://github.com/DamonBao/dsh-codex-suite/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Node](https://img.shields.io/badge/node-%5E22.19%20%7C%7C%20%3E%3D24-green.svg)](#development)
+[![Node](https://img.shields.io/badge/node-%3E%3D24.9-green.svg)](#development)
 [![pnpm](https://img.shields.io/badge/pnpm-11-orange.svg)](#development)
 
 English | [简体中文](README.zh.md)
 
-A suite of [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) (DSH) plugins that brings **ChatGPT/OpenAI Codex models** and a **Codex-style conversation experience** to the DSH Web UI. Built against DSH `0.2.1-rc.2` (peer range `>=0.2.0-rc.2 <0.3.0-0`).
+A suite of [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) (DSH) plugins that brings **ChatGPT/OpenAI Codex models** and a **Codex-style conversation experience** to the DSH Web UI. Built against DSH `0.2.2-rc.1` (peer range `>=0.2.2-rc.1 <0.3.0-0`).
 
 The repository is a pnpm monorepo containing two independent runtime plugins and one pure bundle package:
 
@@ -32,7 +32,7 @@ The two plugins are fully decoupled: the Conversation UI works with any model, a
 - **Banked rate-limit resets.** View how many resets the account has banked and their earliest expiry, then redeem one from a confirmation dialog to restore the 5-hour and weekly limit windows.
 - **Proxy-aware networking.** Auto-detects environment and system proxies (macOS / Windows / Linux), routes only OpenAI traffic through them, keeps loopback direct, and exposes an explicit proxy mode (auto / environment / off).
 - **Reliability-first defaults.** SSE transport by default (no partial-output duplication on WebSocket failure), 5-minute stream idle timeout, configurable retry policy.
-- **Native Settings page** at *Plugins → DSH Codex Suite → codex-provider* with zh/en localization, live status, and a loopback-only RPC boundary — credentials never leave the Host.
+- **Native Settings page** at *Plugins → DSH Codex Suite → codex-provider* localized in all eight DSH built-in languages (zh/en/ja/es/fr/de/ru/pt), with live status, and a loopback-only RPC boundary — credentials never leave the Host.
 
 **Conversation UI — enhancements within native DSH chat**
 
@@ -44,26 +44,26 @@ The two plugins are fully decoupled: the Conversation UI works with any model, a
 
 ---
 
-Plugin display metadata is exported as `locale/en.json` and `locale/zh.json`, using `meta.title` and `meta.description`. DSH localizes the plugin list, details, and component names; the ordinary package description remains English for npm.
+Plugin display metadata is exported as `locale/<language>.json` for the eight DSH built-in languages, using `meta.title` and `meta.description`. DSH localizes the plugin list, details, and component names; the ordinary package description remains English for npm.
 
 The manifest declares a packaged SVG with `icon: "./icon.svg"`. The suite and both components use the teal code mark.
 
 ## Installation
 
-Prerequisites: DeepSeek Harness (`dsh`) `>=0.2.0-rc.2 <0.3.0-0` with the `web` profile, Node.js `^22.19 || >=24`, pnpm 11.
+Prerequisites: DeepSeek Harness (`dsh`) `>=0.2.2-rc.1 <0.3.0-0` with the `web` profile, Node.js `>=24.9`, pnpm 11.
 
 **Install the whole suite (recommended):**
 
 ```sh
-dsh plugin --profile web add @jcy2387/dsh-suite@0.2.1-rc.2
+dsh plugin --profile web add @jcy2387/dsh-suite@0.2.2-rc.1
 dsh web
 ```
 
 **Or install plugins individually:**
 
 ```sh
-dsh plugin --profile web add @jcy2387/dsh-codex-provider@0.2.1-rc.2
-dsh plugin --profile web add @jcy2387/dsh-conversation-ui@0.2.1-rc.2
+dsh plugin --profile web add @jcy2387/dsh-codex-provider@0.2.2-rc.1
+dsh plugin --profile web add @jcy2387/dsh-conversation-ui@0.2.2-rc.1
 dsh web
 ```
 
@@ -138,9 +138,9 @@ The halves communicate through two narrow channels: an inline **boot-config glob
 
 Package-level docs: [codex-provider](packages/codex-provider/README.md) · [conversation-ui](packages/conversation-ui/README.en.md) · [suite](packages/all/README.md)
 
-## DSH 0.2.1-rc.2 compatibility
+## DSH 0.2.2-rc.1 compatibility
 
-The provider uses pi-ai `1.3.0`, matching the DSH adapter. The Conversation UI leaves live status and scrolling to DSH 0.2 and uses its localized duration units for completed Turns, including stopped and failed outcomes. The provider, Conversation UI, and Suite were booted together with the Models and Logistics plugins in an isolated DSH `0.2.1-rc.2` Web profile; all three plugin settings pages rendered without browser console errors. Restart DSH after replacing an older plugin version.
+The provider uses pi-ai `1.3.0`, matching the DSH adapter, and the suite builds against the DSH `0.2.2-rc.1` closure (cordis `4.1.0`, loader `1.1.0`, schemastery `3.19.0`). The Conversation UI leaves live status and scrolling to DSH 0.2 and uses its localized duration units for completed Turns, including stopped and failed outcomes. Both plugins typecheck, pass their unit suites, and boot in an isolated DSH `0.2.2-rc.1` Web profile: the boot graph serves both client bundles, the Conversation UI boot-config global is injected into the served HTML, and both plugin RPC channels answer through the Connection fence. A Playwright pass over that Web profile then confirmed the browser side end to end: both plugin pages and both settings cards render, the eight DSH built-in languages switch live, and the console stays clean. Restart DSH after replacing an older plugin version.
 
 ## DSH 0.1.7-rc.2 startup
 
@@ -154,7 +154,7 @@ The provider keeps using `OPENAI_CODEX_OAUTH` in the original credential store; 
 
 ## Development
 
-Requirements: Node.js `^22.19.0 || >=24.0.0` and pnpm `11.7`.
+Requirements: Node.js `>=24.9.0` and pnpm `11.7`.
 
 ```sh
 pnpm install
@@ -171,7 +171,7 @@ pnpm --filter @jcy2387/dsh-conversation-ui build
 pnpm --dir packages/all pack --dry-run
 ```
 
-Tests run on [vitest](https://vitest.dev) — 17 suites covering the OAuth state machine, token refresh, network/proxy detection, usage and banked-reset parsing, the settings controllers, and the streaming client views. Client tests resolve the installed published DSH packages (a small module-table stand-in instantiates the shipped browser factory bundles). CI verifies release tags match all three package versions and audits the published tarball contents, then runs a consumer smoke test that installs the packed tarballs into a scratch project (resolving the published peer ranges against the real registry) and imports every Node-side entry point.
+Tests run on [vitest](https://vitest.dev) — 19 suites covering the OAuth state machine, token refresh, network/proxy detection, usage and banked-reset parsing, the settings controllers, and the streaming client views. Client tests resolve the installed published DSH packages (a small module-table stand-in instantiates the shipped browser factory bundles). CI verifies release tags match all three package versions and audits the published tarball contents, then runs a consumer smoke test that installs the packed tarballs into a scratch project (resolving the published peer ranges against the real registry) and imports every Node-side entry point.
 
 ### Release
 
@@ -202,12 +202,12 @@ Then create and publish a GitHub Release for that tag. Dependabot checks GitHub 
 │  ├─ codex-provider/     # @jcy2387/dsh-codex-provider
 │  │  ├─ src/             # Host half: OAuth, refresh, network, usage, banked resets, LLM adapter
 │  │  ├─ src/client/      # Web half: Settings section UI
-│  │  ├─ tests/           # 12 vitest suites
+│  │  ├─ tests/           # 13 vitest suites
 │  │  └─ cordis.patch.yml
 │  ├─ conversation-ui/    # @jcy2387/dsh-conversation-ui
 │  │  ├─ src/             # Host half: config bridge, settings RPC
 │  │  ├─ src/client/      # Web half: stream views, cards, native-scroll bridge
-│  │  ├─ tests/           # 3 vitest suites
+│  │  ├─ tests/           # 6 vitest suites
 │  │  └─ cordis.patch.yml
 │  └─ all/                # @jcy2387/dsh-suite (pure bundle, no runtime code)
 ├─ .github/workflows/ci.yml       # validate + tarball audit + consumer smoke

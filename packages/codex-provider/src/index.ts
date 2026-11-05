@@ -64,6 +64,10 @@ export const DEFAULT_CODEX_TRANSPORT: Transport = 'sse'
 export const DEFAULT_STREAM_IDLE_TIMEOUT_MS = 300_000
 /** Default request-level base64 image payload bound required by dsh-llm-pi-ai. */
 const DEFAULT_MAX_REQUEST_IMAGE_BYTES = 20 * 1024 * 1024
+/** Default retained request-image occurrences per request required by dsh-llm-pi-ai. */
+const DEFAULT_MAX_REQUEST_IMAGES = 50
+/** Default oldest-image offload step per count overflow required by dsh-llm-pi-ai. */
+const DEFAULT_IMAGE_OFFLOAD_COUNT_QUANTUM = 10
 /** Default total-pixel request-image budget required by dsh-llm-pi-ai. */
 const DEFAULT_REQUEST_IMAGE_PIXEL_BUDGET = 2048 * 2048
 /** Default raw request-image byte target required by dsh-llm-pi-ai. */
@@ -247,6 +251,8 @@ export function apply(ctx: Context, config: Config): void {
     configuredMaxTokens: new Map(),
     streamIdleTimeoutMs: resolved.streamIdleTimeoutMs,
     maxRequestImageBytes: DEFAULT_MAX_REQUEST_IMAGE_BYTES,
+    maxRequestImages: DEFAULT_MAX_REQUEST_IMAGES,
+    imageOffloadCountQuantum: DEFAULT_IMAGE_OFFLOAD_COUNT_QUANTUM,
     requestImagePixelBudget: DEFAULT_REQUEST_IMAGE_PIXEL_BUDGET,
     requestImageMaxBytes: DEFAULT_REQUEST_IMAGE_MAX_BYTES,
     retryPolicy: resolved.retryPolicy,

@@ -10,7 +10,7 @@ import { createCodexAuthRpcClient } from '../rpc-contract.ts'
 import { CodexSettingsSection } from './CodexSettingsSection.tsx'
 import type { CodexSettingsInjected } from './CodexSettingsSection.tsx'
 import { CodexAuthCardController } from './controller.ts'
-import { en, zh, type CodexSettingsKey } from './locales.ts'
+import { de, en, es, fr, ja, pt, ru, zh, type CodexSettingsKey } from './locales.ts'
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface LocaleNamespaceMap {
@@ -26,7 +26,7 @@ export const inject = ['slots', 'locale', 'connection']
 
 /** Register one removable, independently navigable Codex settings page. */
 export function apply(ctx: ClientContext): void {
-  ctx.effect(() => ctx.locale.register(NS, { zh, en }), '@jcy2387/dsh-codex-provider: dictionaries')
+  ctx.effect(() => ctx.locale.register(NS, { zh, en, ja, es, fr, de, ru, pt }), '@jcy2387/dsh-codex-provider: dictionaries')
   const connection = ctx.get('connection') as unknown as ConnectionHandle
   const controller = new CodexAuthCardController(createCodexAuthRpcClient(connection.rpc))
   const face: CodexSettingsInjected = {

@@ -17,7 +17,20 @@ import * as UiSlots from '@deepseek-ai/dsh-client-ui-slots'
 import * as UiPrimitives from '@deepseek-ai/dsh-client-ui-primitives'
 import * as ClientStore from '@deepseek-ai/dsh-client-store'
 
-type Factory = (require: (id: string) => unknown) => unknown
+/**
+ * The bundle-scoped `require` the Web module table hands to a factory: the
+ * synchronous table lookup plus the asynchronous chunk loader and the
+ * package-asset resolver DSH 0.2.2 client bundles call during materialization.
+ */
+interface BundleRequire {
+  (id: string): unknown
+  /** Load and resolve a package-local dynamic chunk asynchronously. */
+  async: (id: string) => Promise<unknown>
+  /** Resolve a package-asset reference the build compiled into the bundle. */
+  asset: (reference: string) => string
+}
+
+type Factory = (require: BundleRequire) => unknown
 
 interface LoaderEntry {
   id: string
@@ -48,10 +61,14 @@ function requireModule(id: string): unknown {
   throw new Error(`dsh-conversation-ui tests: module table miss for ${JSON.stringify(id)}`)
 }
 
+const bundleRequire = requireModule as BundleRequire
+bundleRequire.async = async (id: string): Promise<unknown> => requireModule(id)
+bundleRequire.asset = (reference: string): string => reference
+
 function materialize(id: string): unknown {
   const factory = factories.get(id)
   if (factory === undefined) throw new Error(`dsh-conversation-ui tests: no factory registered for ${JSON.stringify(id)}`)
-  const exports = factory(requireModule)
+  const exports = factory(bundleRequire)
   materialized.set(id, exports)
   return exports
 }

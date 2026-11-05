@@ -114,7 +114,7 @@ Overlay 示例：
 本包由两半组成：
 
 - **Host 半**（`src/`，从包根导出）—— Cordis 插件，注入 `llm`、`credentials`、`settings`。它掌管 OAuth 生命周期（`CodexAuthService`）、令牌刷新（`CodexTokenRefresher`）、网络管理器、用量服务与重置次数服务（`CodexResetService`），并通过 `PiAiAdapter`（底层为 `@earendil-works/pi-ai` 的 `openaiCodexProvider`）注册 Provider。模型目录在加载时校验（上下文窗口 / max tokens 必须可用于上下文预算与压缩）。
-- **Web 半**（`src/client/`，打包为 `lib/client.cjs`，经 `dsh.client` manifest 发现）—— 注册进 Web UI 设置页的 React 设置分区，提供中英文界面。
+- **Web 半**（`src/client/`，打包为 `lib/client.cjs`，经 `dsh.client` manifest 发现）—— 注册进 Web UI 设置页的 React 设置分区，提供 DSH 内置八种语言界面。
 
 两半之间通过一条**仅限 loopback 权限的 RPC 通道**通信（`status`、`network`、`setProxyMode`、`usage`、`reset-credits`、`reset-credits/consume`、`login`、`cancel`、`logout`）。跨越该边界的失败原因是枚举值，而非错误文本。
 
@@ -127,7 +127,7 @@ pnpm --filter @jcy2387/dsh-codex-provider test
 pnpm --filter @jcy2387/dsh-codex-provider build
 ```
 
-十一个 vitest 套件覆盖：认证状态机与失败归类、IPv6 回调桥、终态与瞬时刷新失败的区分、代理探测（macOS / Windows / Linux / 环境变量）、用量解析与脱敏、重置次数的查询/兑换/幂等键、设置卡片控制器和 RPC 契约。
+十三个 vitest 套件覆盖：认证状态机与失败归类、IPv6 回调桥、终态与瞬时刷新失败的区分、代理探测（macOS / Windows / Linux / 环境变量）、用量解析与脱敏、重置次数的查询/兑换/幂等键、设置卡片控制器和 RPC 契约。
 
 工作区级命令见 [Monorepo README](../../README.zh.md)。
 
@@ -135,4 +135,4 @@ pnpm --filter @jcy2387/dsh-codex-provider build
 
 [MIT](LICENSE) © jcy2387
 
-本版面向 DSH `0.2.1-rc.2`，并使用与宿主适配器一致的 pi-ai `1.3.0` 类型。旧 `openai-codex.proxyMode` 从 `settings.yaml` 或 `settings.yaml.imported` 导入当前 profile 的 `cordis.patch.yml`，成功后记录迁移标记；失败保留源文件供重试。插件兼容导入只补充缺失的值。名称和描述通过导出的 `locale/en.json`、`locale/zh.json` 跟随 DSH 界面语言。
+本版面向 DSH `0.2.2-rc.1`，并使用与宿主适配器一致的 pi-ai `1.3.0` 类型。旧 `openai-codex.proxyMode` 从 `settings.yaml` 或 `settings.yaml.imported` 导入当前 profile 的 `cordis.patch.yml`，成功后记录迁移标记；失败保留源文件供重试。插件兼容导入只补充缺失的值。名称和描述通过导出的 `locale/<语言>.json` 跟随 DSH 界面语言。
