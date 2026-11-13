@@ -7,7 +7,7 @@
 
 [English](README.md) | 简体中文
 
-为 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)（DSH）打造的插件套件：把 **ChatGPT / OpenAI Codex 模型**和 **Codex 风格的对话体验**带进 DSH Web UI。基于 DSH `0.2.2-rc.1` 构建（peer 范围 `>=0.2.2-rc.1 <0.3.0-0`）。
+为 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)（DSH）打造的插件套件：把 **ChatGPT / OpenAI Codex 模型**和 **Codex 风格的对话体验**带进 DSH Web UI。基于 DSH `0.2.2-rc.5` 构建（peer 范围 `>=0.2.2-rc.5 <0.3.0-0`）。
 
 本仓库是 pnpm monorepo，包含两个相互独立的运行时插件和一个纯组合包：
 
@@ -50,20 +50,20 @@
 
 ## 安装
 
-前置条件：DeepSeek Harness（`dsh`）`>=0.2.2-rc.1 <0.3.0-0`（装有 `web` profile）、Node.js `>=24.9`、pnpm 11。
+前置条件：DeepSeek Harness（`dsh`）`>=0.2.2-rc.5 <0.3.0-0`（装有 `web` profile）、Node.js `>=24.9`、pnpm 11。
 
 **安装整套 Suite（推荐）：**
 
 ```sh
-dsh plugin --profile web add @jcy2387/dsh-suite@0.2.2-rc.1
+dsh plugin --profile web add @jcy2387/dsh-suite@0.2.2-rc.5
 dsh web
 ```
 
 **或单独安装插件：**
 
 ```sh
-dsh plugin --profile web add @jcy2387/dsh-codex-provider@0.2.2-rc.1
-dsh plugin --profile web add @jcy2387/dsh-conversation-ui@0.2.2-rc.1
+dsh plugin --profile web add @jcy2387/dsh-codex-provider@0.2.2-rc.5
+dsh plugin --profile web add @jcy2387/dsh-conversation-ui@0.2.2-rc.5
 dsh web
 ```
 
@@ -138,9 +138,9 @@ dsh web
 
 各包详细文档：[codex-provider](packages/codex-provider/README.zh.md) · [conversation-ui](packages/conversation-ui/README.md) · [suite](packages/all/README.md)
 
-## DSH 0.2.2-rc.1 兼容
+## DSH 0.2.2-rc.5 兼容
 
-Provider 使用与 DSH 适配器一致的 pi-ai `1.3.0`，整套插件基于 DSH `0.2.2-rc.1` 的依赖闭包构建（cordis `4.1.0`、loader `1.1.0`、schemastery `3.19.0`）。Conversation UI 将运行状态和滚动交给 DSH 0.2，已结束的 Turn 使用其本地化时长单位，并正确显示停止和失败状态。两个插件均通过类型检查与单元测试，并能在隔离的 DSH `0.2.2-rc.1` Web profile 中启动：启动图正常下发两个客户端 bundle，Conversation UI 的启动配置全局变量已注入页面，两个插件的 RPC 通道均可通过 Connection 信任围栏应答。随后在同一 Web profile 上用 Playwright 完成了浏览器端确认：两个插件页面与两张设置卡片均正常渲染，DSH 内置的八种语言可实时切换，控制台无报错。替换旧版插件后重启 DSH。
+Provider 使用与 DSH 适配器一致的 pi-ai `1.3.0`，整套插件基于 DSH `0.2.2-rc.5` 的依赖闭包构建（cordis `4.1.0`、loader `1.1.0`、schemastery `3.19.0`）。Conversation UI 将运行状态和滚动交给 DSH 0.2，已结束的 Turn 使用其本地化时长单位，并正确显示停止和失败状态。两个插件均通过类型检查与单元测试，并能在隔离的 DSH `0.2.2-rc.5` Web profile 中启动：启动图正常下发两个客户端 bundle，Conversation UI 的启动配置全局变量已注入页面，两个插件的 RPC 通道均可通过 Connection 信任围栏应答。随后在同一 Web profile 上用 Playwright 完成了浏览器端确认：两个插件页面与两张设置卡片均正常渲染，DSH 内置的八种语言可实时切换，控制台无报错。替换旧版插件后重启 DSH。DSH 0.2.2-rc.5 对本插件使用的契约保持兼容：rc.3 新增的 `hoc` 插槽、Markdown 代码围栏层和插件页更新通道，以及 rc.4/rc.5 新增的 `CONTENT_REFUSED` 失败码，都不改变 Codex 插件占用的席位，因此 rc.1 的源码无需改动，只更新了依赖闭包与版本号。
 
 ## DSH 0.1.7-rc.2 启动兼容
 
