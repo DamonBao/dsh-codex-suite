@@ -50,6 +50,7 @@ minimumReleaseAgeExclude:
   - '@deepseek-ai/dsh-commands@0.2.2-rc.5'
   - '@deepseek-ai/dsh-cordis-host-runner@0.2.2-rc.5'
   - '@deepseek-ai/dsh-credentials@0.2.2-rc.5'
+  - '@deepseek-ai/dsh-error@0.2.2-rc.5'
   - '@deepseek-ai/dsh-fs-patch@0.2.2-rc.5'
   - '@deepseek-ai/dsh-goal@0.2.2-rc.5'
   - '@deepseek-ai/dsh-home-paths@0.2.2-rc.5'
