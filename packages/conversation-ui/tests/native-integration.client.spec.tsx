@@ -54,7 +54,7 @@ async function bench(pluginFirst = false) {
       call: async () => ({
         ok: true,
         value: {
-          version: '0.2.2-rc.1',
+          version: '0.2.2-rc.5',
           installation: 'development',
           writable: true,
           thinkAutoExpand: true,

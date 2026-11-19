@@ -135,4 +135,4 @@ See the [monorepo README](../../README.md) for workspace-wide commands.
 
 [MIT](LICENSE) © jcy2387
 
-This release targets DSH `0.2.2-rc.1` and uses the same pi-ai `1.3.0` types as the host adapter. It imports `openai-codex.proxyMode` from `settings.yaml` or `settings.yaml.imported` into the active profile’s `cordis.patch.yml`, recording a marker after success and retaining the source after failure. The plugin’s compatibility import fills only missing values. Exported `locale/<language>.json` files localize the name and description in DSH.
+This release targets DSH `0.2.2-rc.5` and uses the same pi-ai `1.3.0` types as the host adapter. It imports `openai-codex.proxyMode` from `settings.yaml` or `settings.yaml.imported` into the active profile’s `cordis.patch.yml`, recording a marker after success and retaining the source after failure. The plugin’s compatibility import fills only missing values. Exported `locale/<language>.json` files localize the name and description in DSH.
